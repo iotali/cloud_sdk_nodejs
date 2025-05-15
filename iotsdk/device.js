@@ -152,6 +152,73 @@ class DeviceManager {
 
 		return response;
 	}
+
+	/**
+	 * 查询产品下所有设备
+	 * @param {string} product_key - 产品唯一标识码
+	 * @param {number} [page=1] - 页码
+	 * @param {number} [page_size=20] - 每页数量
+	 * @returns {Promise<Object>}
+	 */
+	async query_devices_by_product(product_key, page = 1, page_size = 20) {
+		const endpoint = '/api/v1/quickdevice/queryDevice';
+		const payload = {
+			productKey: product_key,
+			page: Math.max(1, page),
+			pageSize: Math.min(100, Math.max(1, page_size)),
+		};
+
+		const response = await this.client._make_request(endpoint, payload);
+
+		if (this.client.check_response(response)) {
+			const devices = response.data;
+			this.logger.info(`查询到${devices.length}台设备`);
+			devices.forEach((device, index) => {
+				this.logger.info(
+					`设备${index + 1}: ${device.deviceName} (${device.deviceId})`
+				);
+				this.logger.info(
+					`状态: ${device.status === 'ONLINE' ? '在线' : '离线'}`
+				);
+			});
+		}
+
+		return response;
+	}
+
+	/**
+	 * 批量查询设备详情
+	 * @param {string} product_key - 产品唯一标识码
+	 * @param {string[]} device_names - 设备名称列表
+	 * @returns {Promise<Object>}
+	 */
+	async batch_query_device_details(product_key, device_names) {
+		if (!device_names || device_names.length === 0) {
+			throw new Error('设备名称列表不能为空');
+		}
+
+		const endpoint = '/api/v1/quickdevice/batchQueryDeviceDetail';
+		const payload = {
+			productKey: product_key,
+			deviceNames: device_names,
+		};
+
+		const response = await this.client._make_request(endpoint, payload);
+
+		if (this.client.check_response(response)) {
+			const devices = response.data;
+			this.logger.info(`批量查询到${devices.length}台设备详情`);
+			devices.forEach((device) => {
+				this.logger.info(`设备名称: ${device.deviceName}`);
+				this.logger.info(
+					`最后在线: ${new Date(device.lastOnlineTime).toLocaleString()}`
+				);
+				this.logger.info(`固件版本: ${device.firmwareVersion || '未知'}`);
+			});
+		}
+
+		return response;
+	}
 }
 
 module.exports = { DeviceManager };
