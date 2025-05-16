@@ -76,7 +76,40 @@ function get_status_text(status) {
 	return status_map[status] || status;
 }
 
+const handleApiRequest = ({
+	client,
+	endpoint,
+	payload,
+	logger,
+	resourceType,
+}) => {
+	if (!client || !endpoint) {
+		throw new Error('缺少必要的客户端配置或API端点');
+	}
+
+	console.debug(`正在请求${resourceType}接口: ${endpoint}`, payload);
+
+	return client
+		._make_request(endpoint, payload)
+		.then((response) => {
+			if (response.code === 200) {
+				console.info(`${resourceType}操作成功: ${endpoint}`);
+				return response.data;
+			}
+			console.error(`${resourceType}请求异常: ${response.statusText}`);
+			throw new Error(response.data?.errorMessage || 'API请求失败');
+		})
+		.catch((error) => {
+			console.error(`${resourceType}请求错误: ${error.message}`, {
+				endpoint,
+				error: error.stack,
+			});
+			throw error;
+		});
+};
+
 module.exports = {
+	handleApiRequest,
 	format_timestamp,
 	format_iso_time,
 	format_offline_duration,

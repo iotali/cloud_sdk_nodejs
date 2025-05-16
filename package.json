@@ -2,7 +2,7 @@
 	"name": "iotsdk",
 	"version": "1.0.0",
 	"description": "IoT云平台SDK，提供与IoT云平台交互的简便方法",
-	"main": "index.js",
+	"main": "iotsdk/index.js",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1"
 	},
@@ -10,6 +10,7 @@
 	"license": "MIT",
 	"dependencies": {
 		"axios": "^1.4.0",
-		"date-fns": "^4.1.0"
+		"date-fns": "^4.1.0",
+		"log4js": "^6.9.1"
 	}
 }

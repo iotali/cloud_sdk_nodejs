@@ -14,9 +14,11 @@ class IoTClient {
 	 * @param {string} base_url - API基础URL
 	 * @param {string} token - 认证令牌
 	 */
-	constructor(base_url, token) {
-		this.base_url = base_url.replace(/\/$/, '');
+	constructor({ baseUrl, token }) {
+		const { logger } = require('./utils');
+		this.base_url = baseUrl.replace(/\/$/, '');
 		this.token = token;
+		this.logger = logger;
 
 		if (!this.base_url) {
 			throw new Error('无效的base_url');
@@ -25,7 +27,7 @@ class IoTClient {
 			throw new Error('无效的token');
 		}
 
-		logger.info(`IoT客户端已初始化: ${this.base_url}`);
+		console.info(`IoT客户端已初始化: ${this.base_url}`);
 	}
 
 	/**
@@ -35,32 +37,32 @@ class IoTClient {
 	 * @param {string} app_secret - 应用密钥
 	 * @returns {Promise<IoTClient>}
 	 */
-	static async from_credentials(base_url, app_id, app_secret) {
-		logger.info('通过应用凭证初始化IoT客户端');
+	static async fromCredentials({ baseUrl, appId, appSecret }) {
+		console.info('通过应用凭证初始化IoT客户端');
 
-		const auth_url = `${base_url.replace(/\/$/, '')}/api/v1/oauth/auth`;
+		const auth_url = `${baseUrl.replace(/\/$/, '')}/api/v1/oauth/auth`;
 		const headers = { 'Content-Type': 'application/json' };
-		const payload = { appId: app_id, appSecret: app_secret };
+		const payload = { appId, appSecret };
 
-		logger.debug(`发送认证请求: POST ${auth_url}`);
-		logger.debug(`认证请求体: ${JSON.stringify(payload)}`);
+		console.debug(`发送认证请求: POST ${auth_url}`);
+		console.debug(`认证请求体: ${JSON.stringify(payload)}`);
 
 		try {
 			const response = await axios.post(auth_url, payload, { headers });
 			const result = response.data;
-			logger.debug(`收到认证响应: ${JSON.stringify(result)}`);
+			console.debug(`收到认证响应: ${JSON.stringify(result)}`);
 
 			if (!result.success || result.code !== 200) {
 				const error_msg = result.errorMessage || '未知错误';
-				logger.error(`认证失败: ${error_msg}`);
+				console.error(`认证失败: ${error_msg}`);
 				throw new Error(`认证失败: ${error_msg}`);
 			}
 
 			const token = result.data;
-			logger.info('认证成功，已获取token');
+			console.info('认证成功，已获取token');
 			return new IoTClient(base_url, token);
 		} catch (error) {
-			logger.error(`认证请求错误: ${error.message}`);
+			console.error(`认证请求错误: ${error.message}`);
 			throw error;
 		}
 	}
@@ -86,9 +88,9 @@ class IoTClient {
 			...additional_headers,
 		};
 
-		logger.debug(`发送请求: ${method} ${url}`);
-		logger.debug(`请求头: ${JSON.stringify(headers)}`);
-		logger.debug(`请求体: ${JSON.stringify(payload)}`);
+		console.debug(`发送请求: ${method} ${url}`);
+		console.debug(`请求头: ${JSON.stringify(headers)}`);
+		console.debug(`请求体: ${JSON.stringify(payload)}`);
 
 		try {
 			let response;
@@ -101,10 +103,10 @@ class IoTClient {
 			}
 
 			const result = response.data;
-			logger.debug(`收到响应: ${JSON.stringify(result)}`);
+			console.debug(`收到响应: ${JSON.stringify(result)}`);
 			return result;
 		} catch (error) {
-			logger.error(`请求错误: ${error.message}`);
+			console.error(`请��错误: ${error.message}`);
 			throw error;
 		}
 	}
@@ -120,8 +122,10 @@ class IoTClient {
 		const success = response.success || false;
 		if (!success) {
 			const error_msg = response.errorMessage || '未知错误';
-			logger.warning(`API调用失败: ${error_msg}`);
+			console.info(`API调用失败: ${error_msg}`);
 		}
 		return success;
 	}
 }
+
+module.exports = IoTClient;
