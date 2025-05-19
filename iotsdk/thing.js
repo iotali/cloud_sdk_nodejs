@@ -27,9 +27,9 @@ class ThingManager {
 			throw new Error('IoT client not initialized');
 		}
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const data = response;
 		}
 
@@ -52,9 +52,9 @@ class ThingManager {
 			throw new Error('IoT client not initialized');
 		}
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const data = response;
 		}
 
@@ -77,9 +77,9 @@ class ThingManager {
 			throw new Error('IoT client not initialized');
 		}
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const data = response;
 		}
 
@@ -100,9 +100,9 @@ class ThingManager {
 		if (!this.client) {
 			throw new Error('IoT client not initialized');
 		}
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const point = response;
 		}
 
@@ -176,9 +176,9 @@ class ThingManager {
 			'queryDeviceEventData'
 		);
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			return response;
 		}
 
@@ -207,9 +207,9 @@ class ThingManager {
 			'setDevicesProperty'
 		);
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			return response;
 		}
 
@@ -238,9 +238,9 @@ class ThingManager {
 			'setBatchDevicesProperty'
 		);
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			return response;
 		}
 
@@ -266,9 +266,9 @@ class ThingManager {
 			throw new Error('IoT client not initialized');
 		}
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			return response;
 		}
 
@@ -294,9 +294,9 @@ class ThingManager {
 			throw new Error('IoT client not initialized');
 		}
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			return response;
 		}
 

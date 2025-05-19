@@ -11,30 +11,30 @@ const logger = log4js.getLogger('iotsdk');
 class IoTClient {
 	/**
 	 * 初始化IoT客户端
-	 * @param {string} base_url - API基础URL
+	 * @param {string} baseUrl - API基础URL
 	 * @param {string} token - 认证令牌
 	 */
 	constructor({ baseUrl, token }) {
 		const { logger } = require('./utils');
-		this.base_url = baseUrl.replace(/\/$/, '');
+		this.baseUrl = baseUrl.replace(/\/$/, '');
 		this.token = token;
 		this.logger = logger;
 
-		if (!this.base_url) {
-			throw new Error('无效的base_url');
+		if (!this.baseUrl) {
+			throw new Error('无效的baseUrl');
 		}
 		if (!this.token) {
 			throw new Error('无效的token');
 		}
 
-		console.info(`IoT客户端已初始化: ${this.base_url}`);
+		console.info(`IoT客户端已初始化: ${this.baseUrl}`);
 	}
 
 	/**
 	 * 通过应用凭证初始化IoT客户端
-	 * @param {string} base_url - API基础URL
-	 * @param {string} app_id - 应用ID
-	 * @param {string} app_secret - 应用密钥
+	 * @param {string} baseUrl - API基础URL
+	 * @param {string} appId - 应用ID
+	 * @param {string} appSecret - 应用密钥
 	 * @returns {Promise<IoTClient>}
 	 */
 	static async fromCredentials({ baseUrl, appId, appSecret }) {
@@ -53,14 +53,14 @@ class IoTClient {
 			console.debug(`收到认证响应: ${JSON.stringify(result)}`);
 
 			if (!result.success || result.code !== 200) {
-				const error_msg = result.errorMessage || '未知错误';
-				console.error(`认证失败: ${error_msg}`);
-				throw new Error(`认证失败: ${error_msg}`);
+				const errorMsg = result.errorMessage || '未知错误';
+				console.error(`认证失败: ${errorMsg}`);
+				throw new Error(`认证失败: ${errorMsg}`);
 			}
 
 			const token = result.data;
 			console.info('认证成功，已获取token');
-			return new IoTClient(base_url, token);
+			return new IoTClient(baseUrl, token);
 		} catch (error) {
 			console.error(`认证请求错误: ${error.message}`);
 			throw error;
@@ -72,20 +72,20 @@ class IoTClient {
 	 * @param {string} endpoint - API端点路径
 	 * @param {Object} payload - 请求体数据
 	 * @param {string} method - HTTP方法(默认POST)
-	 * @param {Object} additional_headers - 附加的请求头
+	 * @param {Object} additionalHeaders - 附加的请求头
 	 * @returns {Promise<Object>}
 	 */
-	async _make_request(
+	async makeRequest(
 		endpoint,
 		payload = {},
 		method = 'POST',
-		additional_headers = {}
+		additionalHeaders = {}
 	) {
-		const url = `${this.base_url}${endpoint}`;
+		const url = `${this.baseUrl}${endpoint}`;
 		const headers = {
 			'Content-Type': 'application/json',
 			token: this.token,
-			...additional_headers,
+			...additionalHeaders,
 		};
 
 		console.debug(`发送请求: ${method} ${url}`);
@@ -116,13 +116,13 @@ class IoTClient {
 	 * @param {Object} response - API响应
 	 * @returns {boolean}
 	 */
-	check_response(response) {
+	checkResponse(response) {
 		if (!response) return false;
 
 		const success = response.success || false;
 		if (!success) {
-			const error_msg = response.errorMessage || '未知错误';
-			console.info(`API调用失败: ${error_msg}`);
+			const errorMsg = response.errorMessage || '未知错误';
+			console.info(`API调用失败: ${errorMsg}`);
 		}
 		return success;
 	}

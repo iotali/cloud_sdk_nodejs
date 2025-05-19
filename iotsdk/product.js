@@ -25,9 +25,9 @@ class ProductManager {
 			throw new Error('IoT client not initialized');
 		}
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const data = response;
 		}
 
@@ -44,9 +44,9 @@ class ProductManager {
 			throw new Error('IoT client not initialized');
 		}
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const data = response;
 		}
 
@@ -63,9 +63,9 @@ class ProductManager {
 			throw new Error('IoT client not initialized');
 		}
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const data = response;
 		}
 
@@ -86,9 +86,9 @@ class ProductManager {
 			throw new Error('IoT client not initialized');
 		}
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const data = response;
 		}
 

@@ -20,30 +20,30 @@ class DeviceManager {
 
 	/**
 	 * 注册设备
-	 * @param {string} product_key - 产品唯一标识码
-	 * @param {string} [device_name] - 设备标识码，可选，若未提供则自动生成
-	 * @param {string} [nick_name] - 设备显示名称，可选
+	 * @param {string} productKey - 产品唯一标识码
+	 * @param {string} [deviceName] - 设备标识码，可选，若未提供则自动生成
+	 * @param {string} [nickName] - 设备显示名称，可选
 	 * @returns {Promise<Object>}
 	 */
-	async register_device(product_key, device_name, nick_name) {
+	async registerDevice(productKey, deviceName, nickName) {
 		const endpoint = '/api/v1/quickdevice/register';
-		const payload = { productKey: product_key };
+		const payload = { productKey: productKey };
 
-		if (device_name) payload.deviceName = device_name;
-		if (nick_name) payload.nickName = nick_name;
+		if (deviceName) payload.deviceName = deviceName;
+		if (nickName) payload.nickName = nickName;
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
-			const device_info = response.data;
-			this.logger.info(`设备注册成功: ${device_info.deviceName}`);
+		if (this.client.checkResponse(response)) {
+			const deviceInfo = response.data;
+			this.logger.info(`设备注册成功: ${deviceInfo.deviceName}`);
 
 			this.logger.info('设备信息摘要:');
-			this.logger.info(`产品密钥: ${device_info.productKey}`);
-			this.logger.info(`设备名称: ${device_info.deviceName}`);
-			this.logger.info(`显示名称: ${device_info.nickName}`);
-			this.logger.info(`设备ID: ${device_info.deviceId}`);
-			this.logger.info(`设备密钥: ${device_info.deviceSecret}`);
+			this.logger.info(`产品密钥: ${deviceInfo.productKey}`);
+			this.logger.info(`设备名称: ${deviceInfo.deviceName}`);
+			this.logger.info(`显示名称: ${deviceInfo.nickName}`);
+			this.logger.info(`设备ID: ${deviceInfo.deviceId}`);
+			this.logger.info(`设备密钥: ${deviceInfo.deviceSecret}`);
 		}
 
 		return response;
@@ -51,36 +51,36 @@ class DeviceManager {
 
 	/**
 	 * 查询设备详情
-	 * @param {string} [device_name] - 设备编码，可选
-	 * @param {string} [device_id] - 设备唯一标识，可选
+	 * @param {string} [deviceName] - 设备编码，可选
+	 * @param {string} [deviceId] - 设备唯一标识，可选
 	 * @returns {Promise<Object>}
 	 */
-	async get_device_detail(device_name, device_id) {
-		if (!device_name && !device_id) {
+	async getDeviceDetail(deviceName, deviceId) {
+		if (!deviceName && !deviceId) {
 			throw new Error('设备编码(deviceName)和设备ID(deviceId)至少需要提供一个');
 		}
 
 		const endpoint = '/api/v1/quickdevice/detail';
 		const payload = {};
-		if (device_name) payload.deviceName = device_name;
-		if (device_id) payload.deviceId = device_id;
+		if (deviceName) payload.deviceName = deviceName;
+		if (deviceId) payload.deviceId = deviceId;
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
-			const device_info = response.data;
-			const device_status = device_info.status;
+		if (this.client.checkResponse(response)) {
+			const deviceInfo = response.data;
+			const deviceStatus = deviceInfo.status;
 
-			const status_map = {
+			const statusMap = {
 				ONLINE: '在线',
 				OFFLINE: '离线',
 				UNACTIVE: '未激活',
 			};
-			const status_text = status_map[device_status] || device_status;
+			const statusText = statusMap[deviceStatus] || deviceStatus;
 
-			this.logger.info(`设备ID: ${device_info.deviceId || '未知'}`);
-			this.logger.info(`设备名称: ${device_info.deviceName || '未知'}`);
-			this.logger.info(`设备状态: ${status_text}`);
+			this.logger.info(`设备ID: ${deviceInfo.deviceId || '未知'}`);
+			this.logger.info(`设备名称: ${deviceInfo.deviceName || '未知'}`);
+			this.logger.info(`设备状态: ${statusText}`);
 		}
 
 		return response;
@@ -88,65 +88,65 @@ class DeviceManager {
 
 	/**
 	 * 查询设备在线状态
-	 * @param {string} [device_name] - 设备编码，可选
-	 * @param {string} [device_id] - 设备唯一标识，可选
+	 * @param {string} [deviceName] - 设备编码，可选
+	 * @param {string} [deviceId] - 设备唯一标识，可选
 	 * @returns {Promise<Object>}
 	 */
-	async get_device_status(device_name, device_id) {
-		if (!device_name && !device_id) {
+	async getDeviceStatus(deviceName, deviceId) {
+		if (!deviceName && !deviceId) {
 			throw new Error('设备编码(deviceName)和设备ID(deviceId)至少需要提供一个');
 		}
 
 		const endpoint = '/api/v1/quickdevice/status';
 		const payload = {};
-		if (device_name) payload.deviceName = device_name;
-		if (device_id) payload.deviceId = device_id;
+		if (deviceName) payload.deviceName = deviceName;
+		if (deviceId) payload.deviceId = deviceId;
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
-			const status_data = response.data;
-			const device_status = status_data.status;
-			const timestamp_ms = status_data.timestamp;
+		if (this.client.checkResponse(response)) {
+			const statusData = response.data;
+			const deviceStatus = statusData.status;
+			const timestampMs = statusData.timestamp;
 
-			const status_map = {
+			const statusMap = {
 				ONLINE: '在线',
 				OFFLINE: '离线',
 				UNACTIVE: '未激活',
 			};
-			const status_text = status_map[device_status] || device_status;
+			const statusText = statusMap[deviceStatus] || deviceStatus;
 
 			let time_str = '未知';
-			if (timestamp_ms) {
-				const dt = new Date(timestamp_ms);
+			if (timestampMs) {
+				const dt = new Date(timestampMs);
 				time_str = dt.toLocaleString();
 			}
 
-			this.logger.info(`设备状态: ${status_text}`);
+			this.logger.info(`设备状态: ${statusText}`);
 			this.logger.info(`状态更新时间: ${time_str}`);
 
-			if (device_status === 'OFFLINE' && timestamp_ms) {
-				const now_ms = Date.now();
-				const offline_duration_ms = now_ms - timestamp_ms;
-				const offline_minutes = offline_duration_ms / (1000 * 60);
+			if (deviceStatus === 'OFFLINE' && timestampMs) {
+				const nowMs = Date.now();
+				const offlineDurationMs = nowMs - timestampMs;
+				const offlineMinutes = offlineDurationMs / (1000 * 60);
 
-				let offline_text;
-				if (offline_minutes < 60) {
-					offline_text = `约 ${Math.floor(offline_minutes)} 分钟`;
+				let offlineText;
+				if (offlineMinutes < 60) {
+					offlineText = `约 ${Math.floor(offlineMinutes)} 分钟`;
 				} else {
-					const offline_hours = offline_minutes / 60;
-					if (offline_hours < 24) {
-						offline_text = `约 ${Math.floor(offline_hours)} 小时 ${Math.floor(
-							offline_minutes % 60
+					const offlineHours = offlineMinutes / 60;
+					if (offlineHours < 24) {
+						offlineText = `约 ${Math.floor(offlineHours)} 小时 ${Math.floor(
+							offlineMinutes % 60
 						)} 分钟`;
 					} else {
-						const offline_days = Math.floor(offline_hours / 24);
-						const remaining_hours = Math.floor(offline_hours % 24);
-						offline_text = `约 ${offline_days} 天 ${remaining_hours} 小时`;
+						const offlineDays = Math.floor(offlineHours / 24);
+						const remainingHours = Math.floor(offlineHours % 24);
+						offlineText = `约 ${offlineDays} 天 ${remainingHours} 小时`;
 					}
 				}
 
-				this.logger.info(`离线时长: ${offline_text}`);
+				this.logger.info(`离线时长: ${offlineText}`);
 			}
 		}
 
@@ -155,22 +155,22 @@ class DeviceManager {
 
 	/**
 	 * 查询产品下所有设备
-	 * @param {string} product_key - 产品唯一标识码
+	 * @param {string} productKey - 产品唯一标识码
 	 * @param {number} [page=1] - 页码
-	 * @param {number} [page_size=20] - 每页数量
+	 * @param {number} [pageSize=20] - 每页数量
 	 * @returns {Promise<Object>}
 	 */
-	async query_devices_by_product(product_key, page = 1, page_size = 20) {
+	async queryDevicesByProduct(productKey, page = 1, pageSize = 20) {
 		const endpoint = '/api/v1/quickdevice/queryDevice';
 		const payload = {
-			productKey: product_key,
+			productKey: productKey,
 			page: Math.max(1, page),
-			pageSize: Math.min(100, Math.max(1, page_size)),
+			pageSize: Math.min(100, Math.max(1, pageSize)),
 		};
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const devices = response.data;
 			this.logger.info(`查询到${devices.length}台设备`);
 			devices.forEach((device, index) => {
@@ -188,24 +188,24 @@ class DeviceManager {
 
 	/**
 	 * 批量查询设备详情
-	 * @param {string} product_key - 产品唯一标识码
-	 * @param {string[]} device_names - 设备名称列表
+	 * @param {string} productKey - 产品唯一标识码
+	 * @param {string[]} deviceNames - 设备名称列表
 	 * @returns {Promise<Object>}
 	 */
-	async batch_query_device_details(product_key, device_names) {
-		if (!device_names || device_names.length === 0) {
+	async batchQueryDeviceDetails(productKey, deviceNames) {
+		if (!deviceNames || deviceNames.length === 0) {
 			throw new Error('设备名称列表不能为空');
 		}
 
 		const endpoint = '/api/v1/quickdevice/batchQueryDeviceDetail';
 		const payload = {
-			productKey: product_key,
-			deviceNames: device_names,
+			productKey: productKey,
+			deviceNames: deviceNames,
 		};
 
-		const response = await this.client._make_request(endpoint, payload);
+		const response = await this.client.makeRequest(endpoint, payload);
 
-		if (this.client.check_response(response)) {
+		if (this.client.checkResponse(response)) {
 			const devices = response.data;
 			this.logger.info(`批量查询到${devices.length}台设备详情`);
 			devices.forEach((device) => {
