@@ -53,7 +53,8 @@ async function queryDevicePropertyData(
 	deviceName,
 	identifier,
 	startTime,
-	endTime
+	endTime,
+	downSampling
 ) {
 	return handleApiRequest({
 		apiCall: (manager) =>
@@ -61,13 +62,14 @@ async function queryDevicePropertyData(
 				deviceName,
 				identifier,
 				startTime,
-				endTime
+				endTime,
+				downSampling
 			),
 		baseUrl,
 		token,
 		successMessage: '属性记录查询成功',
 		errorMessage: '属性记录查询失败',
-		args: [deviceName, identifier, startTime, endTime],
+		args: [deviceName, identifier, startTime, endTime, downSampling],
 	});
 }
 // 批量查询指定设备的属性记录
@@ -77,7 +79,8 @@ async function queryDevicePropertiesData(
 	deviceName,
 	identifier,
 	startTime,
-	endTime
+	endTime,
+	downSampling
 ) {
 	return handleApiRequest({
 		apiCall: (manager) =>
@@ -85,13 +88,14 @@ async function queryDevicePropertiesData(
 				deviceName,
 				identifier,
 				startTime,
-				endTime
+				endTime,
+				downSampling
 			),
 		baseUrl,
 		token,
 		successMessage: '批量属性记录查询成功',
 		errorMessage: '批量属性记录查询失败',
-		args: [deviceName, identifier, startTime, endTime],
+		args: [deviceName, identifier, startTime, endTime, downSampling],
 	});
 }
 // 查询指定设备的事件记录
@@ -177,19 +181,20 @@ if (require.main === module) {
 	// queryDevicePropertyData(
 	// 	baseUrl,
 	// 	token,
-	// 	'u9OAii0rXO',
-	// 	'motor_speed',
-	// 	'2025-05-14 06:30:39',
-	// 	'2025-05-14 10:30:39'
+	// 	'MM2025002',
+	// 	'rotation_speed',
+	// 	'2025-07-16 06:30:39',
+	// 	'2025-07-16 14:30:39'
 	// );
 
 	// queryDevicePropertiesData(
 	// 	baseUrl,
 	// 	token,
-	// 	'u9OAii0rXO',
-	// 	['motor_speed', 'temperature'],
-	// 	'2025-05-14 06:30:39',
-	// 	'2025-05-14 10:30:39'
+	// 	'MM2025002',
+	// 	['pressure', 'rotation_speed'],
+	// 	'2025-07-16 06:30:39',
+	// 	'2025-07-16 14:30:39',
+	// 	'10s'
 	// );
 
 	// queryDeviceEventData(

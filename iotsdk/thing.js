@@ -30,7 +30,7 @@ class ThingManager {
 		const response = await this.client.makeRequest(endpoint, payload);
 
 		if (this.client.checkResponse(response)) {
-			const data = response;
+			return response;
 		}
 
 		return response;
@@ -44,9 +44,21 @@ class ThingManager {
 	 * @param {string} endTime - 结束时间
 	 * @returns {Promise<Object>}
 	 */
-	async queryDevicePropertiesData(deviceName, identifiers, startTime, endTime) {
+	async queryDevicePropertiesData(
+		deviceName,
+		identifiers,
+		startTime,
+		endTime,
+		downSampling = '1s'
+	) {
 		const endpoint = '/api/v1/thing/queryDevicePropertiesData';
-		const payload = { deviceName, identifier: identifiers, startTime, endTime };
+		const payload = {
+			deviceName,
+			identifier: identifiers,
+			startTime,
+			endTime,
+			downSampling,
+		};
 
 		if (!this.client) {
 			throw new Error('IoT client not initialized');
@@ -55,7 +67,7 @@ class ThingManager {
 		const response = await this.client.makeRequest(endpoint, payload);
 
 		if (this.client.checkResponse(response)) {
-			const data = response;
+			return response;
 		}
 
 		return response;
@@ -69,9 +81,21 @@ class ThingManager {
 	 * @param {string} endTime - 结束时间
 	 * @returns {Promise<Object>}
 	 */
-	async queryDevicePropertyData(deviceName, identifier, startTime, endTime) {
+	async queryDevicePropertyData(
+		deviceName,
+		identifier,
+		startTime,
+		endTime,
+		downSampling = '1s'
+	) {
 		const endpoint = '/api/v1/thing/queryDevicePropertyData';
-		const payload = { deviceName, identifier, startTime, endTime };
+		const payload = {
+			deviceName,
+			identifier,
+			startTime,
+			endTime,
+			downSampling,
+		};
 
 		if (!this.client) {
 			throw new Error('IoT client not initialized');
@@ -80,7 +104,7 @@ class ThingManager {
 		const response = await this.client.makeRequest(endpoint, payload);
 
 		if (this.client.checkResponse(response)) {
-			const data = response;
+			return response;
 		}
 
 		return response;
@@ -103,7 +127,7 @@ class ThingManager {
 		const response = await this.client.makeRequest(endpoint, payload);
 
 		if (this.client.checkResponse(response)) {
-			const point = response;
+			return response;
 		}
 
 		return response;
@@ -112,12 +136,6 @@ class ThingManager {
 	// 统一参数校验方法
 	#validateParams(params, methodName) {
 		const requiredParams = {
-			queryDevicePropertyData: [
-				'deviceName',
-				'identifier',
-				'startTime',
-				'endTime',
-			],
 			queryDeviceServiceData: [
 				'deviceName',
 				'identifier',
