@@ -76,13 +76,7 @@ function getStatusText(status) {
 	return status_map[status] || status;
 }
 
-const handleApiRequest = ({
-	client,
-	endpoint,
-	payload,
-	logger,
-	resourceType,
-}) => {
+const handleApiRequest = ({ client, endpoint, payload, resourceType }) => {
 	if (!client || !endpoint) {
 		throw new Error('缺少必要的客户端配置或API端点');
 	}

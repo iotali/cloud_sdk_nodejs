@@ -287,41 +287,9 @@ try {
 }
 ```
 
-## 自定义日志
+## 日志说明
 
-SDK 支持使用 log4js 日志库：
-
-```javascript
-const log4js = require('log4js');
-
-// 配置日志系统
-log4js.configure({
-	appenders: {
-		iotsdk: { type: 'console' },
-	},
-	categories: {
-		default: { appenders: ['iotsdk'], level: 'debug' },
-	},
-});
-
-// 获取日志记录器
-const logger = log4js.getLogger('iotsdk');
-
-// 创建带自定义日志的客户端
-const client = iotsdk.createClient({
-	baseUrl: 'https://your-iot-platform-url',
-	token: 'your-auth-token',
-	logger,
-});
-
-// 或使用应用凭证创建
-const client = IoTClient.fromCredentials({
-	baseUrl: 'https://your-iot-platform-url',
-	appId: 'your-app-id',
-	appSecret: 'your-app-secret',
-	logger,
-});
-```
+SDK 默认使用 Node.js 原生的 `console.info`、`console.error` 等日志方法进行输出，无需额外依赖第三方日志库。你可以根据实际需要自行扩展日志方案。
 
 ## 注意事项
 

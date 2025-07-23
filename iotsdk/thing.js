@@ -1,4 +1,3 @@
-const log4js = require('log4js');
 const { IoTClient } = require('./client');
 
 class ThingManager {
@@ -8,7 +7,6 @@ class ThingManager {
 	 */
 	constructor(client) {
 		this.client = client;
-		this.logger = client.logger;
 	}
 
 	/**

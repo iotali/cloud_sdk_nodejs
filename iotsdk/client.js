@@ -6,7 +6,6 @@ log4js.configure({
 	appenders: { iotsdk: { type: 'console' } },
 	categories: { default: { appenders: ['iotsdk'], level: 'info' } },
 });
-const logger = log4js.getLogger('iotsdk');
 
 class IoTClient {
 	/**
@@ -15,10 +14,8 @@ class IoTClient {
 	 * @param {string} token - 认证令牌
 	 */
 	constructor({ baseUrl, token }) {
-		const { logger } = require('./utils');
 		this.baseUrl = baseUrl.replace(/\/$/, '');
 		this.token = token;
-		this.logger = logger;
 
 		if (!this.baseUrl) {
 			throw new Error('无效的baseUrl');

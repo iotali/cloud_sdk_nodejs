@@ -1,12 +1,4 @@
-const log4js = require('log4js');
 const { IoTClient } = require('./client');
-
-// 配置日志
-log4js.configure({
-	appenders: { iotsdk: { type: 'console' } },
-	categories: { default: { appenders: ['iotsdk'], level: 'info' } },
-});
-const logger = log4js.getLogger('iotsdk');
 
 class DeviceManager {
 	/**
@@ -15,7 +7,6 @@ class DeviceManager {
 	 */
 	constructor(client) {
 		this.client = client;
-		this.logger = client.logger;
 	}
 
 	/**
@@ -36,14 +27,13 @@ class DeviceManager {
 
 		if (this.client.checkResponse(response)) {
 			const deviceInfo = response.data;
-			this.logger.info(`设备注册成功: ${deviceInfo.deviceName}`);
-
-			this.logger.info('设备信息摘要:');
-			this.logger.info(`产品密钥: ${deviceInfo.productKey}`);
-			this.logger.info(`设备名称: ${deviceInfo.deviceName}`);
-			this.logger.info(`显示名称: ${deviceInfo.nickName}`);
-			this.logger.info(`设备ID: ${deviceInfo.deviceId}`);
-			this.logger.info(`设备密钥: ${deviceInfo.deviceSecret}`);
+			console.info(`设备注册成功: ${deviceInfo.deviceName}`);
+			console.info('设备信息摘要:');
+			console.info(`产品密钥: ${deviceInfo.productKey}`);
+			console.info(`设备名称: ${deviceInfo.deviceName}`);
+			console.info(`显示名称: ${deviceInfo.nickName}`);
+			console.info(`设备ID: ${deviceInfo.deviceId}`);
+			console.info(`设备密钥: ${deviceInfo.deviceSecret}`);
 		}
 
 		return response;
@@ -78,9 +68,9 @@ class DeviceManager {
 			};
 			const statusText = statusMap[deviceStatus] || deviceStatus;
 
-			this.logger.info(`设备ID: ${deviceInfo.deviceId || '未知'}`);
-			this.logger.info(`设备名称: ${deviceInfo.deviceName || '未知'}`);
-			this.logger.info(`设备状态: ${statusText}`);
+			console.info(`设备ID: ${deviceInfo.deviceId || '未知'}`);
+			console.info(`设备名称: ${deviceInfo.deviceName || '未知'}`);
+			console.info(`设备状态: ${statusText}`);
 		}
 
 		return response;
@@ -122,8 +112,8 @@ class DeviceManager {
 				time_str = dt.toLocaleString();
 			}
 
-			this.logger.info(`设备状态: ${statusText}`);
-			this.logger.info(`状态更新时间: ${time_str}`);
+			console.info(`设备状态: ${statusText}`);
+			console.info(`状态更新时间: ${time_str}`);
 
 			if (deviceStatus === 'OFFLINE' && timestampMs) {
 				const nowMs = Date.now();
@@ -146,7 +136,7 @@ class DeviceManager {
 					}
 				}
 
-				this.logger.info(`离线时长: ${offlineText}`);
+				console.info(`离线时长: ${offlineText}`);
 			}
 		}
 
@@ -172,14 +162,12 @@ class DeviceManager {
 
 		if (this.client.checkResponse(response)) {
 			const devices = response.data;
-			this.logger.info(`查询到${devices.length}台设备`);
+			console.info(`查询到${devices.length}台设备`);
 			devices.forEach((device, index) => {
-				this.logger.info(
+				console.info(
 					`设备${index + 1}: ${device.deviceName} (${device.deviceId})`
 				);
-				this.logger.info(
-					`状态: ${device.status === 'ONLINE' ? '在线' : '离线'}`
-				);
+				console.info(`状态: ${device.status === 'ONLINE' ? '在线' : '离线'}`);
 			});
 		}
 
@@ -207,13 +195,13 @@ class DeviceManager {
 
 		if (this.client.checkResponse(response)) {
 			const devices = response.data;
-			this.logger.info(`批量查询到${devices.length}台设备详情`);
+			console.info(`批量查询到${devices.length}台设备详情`);
 			devices.forEach((device) => {
-				this.logger.info(`设备名称: ${device.deviceName}`);
-				this.logger.info(
+				console.info(`设备名称: ${device.deviceName}`);
+				console.info(
 					`最后在线: ${new Date(device.lastOnlineTime).toLocaleString()}`
 				);
-				this.logger.info(`固件版本: ${device.firmwareVersion || '未知'}`);
+				console.info(`固件版本: ${device.firmwareVersion || '未知'}`);
 			});
 		}
 
