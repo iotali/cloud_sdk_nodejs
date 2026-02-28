@@ -33,6 +33,18 @@
 npm install
 ```
 
+3. 在你的项目中安装 SDK：
+
+```bash
+npm install @iotali/cloud-sdk-nodejs
+```
+
+或使用 GitHub 仓库（推荐固定 tag 版本）：
+
+```bash
+npm install git+https://github.com/iotali/cloud_sdk_nodejs.git#v1.1.0
+```
+
 ## 快速开始
 
 ### 1. 创建客户端和设备管理器
@@ -40,7 +52,7 @@ npm install
 #### 方式一：使用 token 创建客户端（传统方式）
 
 ```javascript
-const iotsdk = require('./iotsdk');
+const iotsdk = require('@iotali/cloud-sdk-nodejs');
 
 // 创建IoT客户端
 const client = iotsdk.createClient({
@@ -55,10 +67,11 @@ const deviceManager = iotsdk.createDeviceManager(client);
 #### 方式二：使用应用凭证创建客户端（推荐方式）
 
 ```javascript
-const { IoTClient } = require('./iotsdk/client');
+const iotsdk = require('@iotali/cloud-sdk-nodejs');
+const { IoTClient } = require('@iotali/cloud-sdk-nodejs');
 
-// 使用应用凭证自动获取token并创建客户端
-const client = IoTClient.fromCredentials({
+// 在 async 函数中使用应用凭证自动获取 token 并创建客户端
+const client = await IoTClient.fromCredentials({
 	baseUrl: 'https://your-iot-platform-url',
 	appId: 'your-app-id',
 	appSecret: 'your-app-secret',
@@ -214,8 +227,8 @@ try {
 ### 使用应用凭证并重用客户端
 
 ```javascript
-const { IoTClient } = require('./iotsdk/client');
-const iotsdk = require('./iotsdk');
+const { IoTClient } = require('@iotali/cloud-sdk-nodejs');
+const iotsdk = require('@iotali/cloud-sdk-nodejs');
 const { Buffer } = require('buffer');
 
 // 配置参数
@@ -229,7 +242,7 @@ const config = {
 (async () => {
 	try {
 		// 初始化客户端（仅一次）
-		const client = IoTClient.fromCredentials(config);
+		const client = await IoTClient.fromCredentials(config);
 		console.log(`客户端初始化成功，Token: ${client.token.substring(0, 10)}...`);
 
 		// 创建设备管理器

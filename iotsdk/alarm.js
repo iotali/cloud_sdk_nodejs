@@ -1,5 +1,3 @@
-const { IoTClient } = require('./client');
-
 class AlarmManager {
 	/**
 	 * 初始化告警管理模块

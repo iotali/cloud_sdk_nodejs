@@ -1,13 +1,50 @@
 {
-	"name": "iotsdk",
-	"version": "1.0.0",
+	"name": "@iotali/cloud-sdk-nodejs",
+	"version": "1.1.0",
 	"description": "IoT云平台SDK，提供与IoT云平台交互的简便方法",
 	"main": "iotsdk/index.js",
-	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1"
+	"type": "commonjs",
+	"exports": {
+		".": "./iotsdk/index.js",
+		"./client": "./iotsdk/client.js",
+		"./device": "./iotsdk/device.js",
+		"./product": "./iotsdk/product.js",
+		"./thing": "./iotsdk/thing.js",
+		"./alarm": "./iotsdk/alarm.js",
+		"./utils": "./iotsdk/utils.js"
 	},
+	"files": [
+		"iotsdk",
+		"README.md",
+		"CHANGELOG.md"
+	],
+	"scripts": {
+		"test": "node -e \"require('./iotsdk')\"",
+		"pack:dry": "npm pack --dry-run"
+	},
+	"keywords": [
+		"iot",
+		"cloud",
+		"sdk",
+		"device-management",
+		"nodejs"
+	],
 	"author": "IoT SDK Team",
 	"license": "MIT",
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/iotali/cloud_sdk_nodejs.git"
+	},
+	"bugs": {
+		"url": "https://github.com/iotali/cloud_sdk_nodejs/issues"
+	},
+	"homepage": "https://github.com/iotali/cloud_sdk_nodejs#readme",
+	"engines": {
+		"node": ">=14"
+	},
 	"dependencies": {
 		"axios": "^1.4.0",
 		"date-fns": "^4.1.0",

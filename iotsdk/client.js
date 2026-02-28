@@ -57,7 +57,7 @@ class IoTClient {
 
 			const token = result.data;
 			console.info('认证成功，已获取token');
-			return new IoTClient(baseUrl, token);
+			return new IoTClient({ baseUrl, token });
 		} catch (error) {
 			console.error(`认证请求错误: ${error.message}`);
 			throw error;
@@ -103,7 +103,7 @@ class IoTClient {
 			console.debug(`收到响应: ${JSON.stringify(result)}`);
 			return result;
 		} catch (error) {
-			console.error(`请��错误: ${error.message}`);
+			console.error(`请求错误: ${error.message}`);
 			throw error;
 		}
 	}
@@ -126,3 +126,4 @@ class IoTClient {
 }
 
 module.exports = IoTClient;
+module.exports.IoTClient = IoTClient;

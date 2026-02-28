@@ -1,5 +1,9 @@
 // IoT SDK设备管理示例（Node.js版本）
-const { IoTClient, createDeviceManager, utils } = require('iotsdk');
+const {
+	IoTClient,
+	createDeviceManager,
+	utils,
+} = require('@iotali/cloud-sdk-nodejs');
 const { promisify } = require('util');
 const base64 = require('base-64');
 

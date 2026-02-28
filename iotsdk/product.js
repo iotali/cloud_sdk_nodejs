@@ -1,5 +1,3 @@
-const { handleApiRequest } = require('./utils');
-
 class ProductManager {
 	/**
 	 * 初始化产品管理模块

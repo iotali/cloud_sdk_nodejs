@@ -1,5 +1,3 @@
-const { IoTClient } = require('./client');
-
 class DeviceManager {
 	/**
 	 * 初始化设备管理模块
