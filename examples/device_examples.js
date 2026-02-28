@@ -2,10 +2,7 @@
 const {
 	IoTClient,
 	createDeviceManager,
-	utils,
 } = require('@iotali/cloud-sdk-nodejs');
-const { promisify } = require('util');
-const base64 = require('base-64');
 
 // 配置参数
 const BASE_URL = 'https://xxx.xxx.com';
@@ -77,14 +74,14 @@ async function sendCustomCommandExample(client) {
 	const base64Message = Buffer.from(messageContent).toString('base64');
 
 	try {
-		const response = await client.makeRequest({
-			endpoint: '/api/v1/device/down/record/add/custom',
-			method: 'POST',
-			data: {
+		const response = await client.makeRequest(
+			'/api/v1/device/down/record/add/custom',
+			{
 				deviceName: '32test',
 				messageContent: base64Message,
 			},
-		});
+			'POST'
+		);
 
 		console.log('\n自定义指令下发成功!');
 		console.log('响应数据:', response.data);

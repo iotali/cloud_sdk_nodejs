@@ -1,6 +1,6 @@
 {
 	"name": "@iotali/cloud-sdk-nodejs",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"description": "IoT云平台SDK，提供与IoT云平台交互的简便方法",
 	"main": "iotsdk/index.js",
 	"type": "commonjs",

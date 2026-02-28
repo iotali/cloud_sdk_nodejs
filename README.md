@@ -19,9 +19,9 @@
   - 设备注册
   - 设备详情查询
   - 设备状态查询
-  - 批量设备状态查询
+  - 产品下设备列表查询
+  - 批量设备详情查询
 - 远程控制
-  - RRPC 消息发送
   - 自定义指令下发（异步）
 
 ## 安装要求
@@ -138,15 +138,16 @@ try {
 }
 ```
 
-### 5. 批量查询设备状态
+### 5. 批量查询设备详情
 
 ```javascript
-// 批量查询设备状态
+// 批量查询设备详情
 const deviceNames = ['device1', 'device2', 'device3'];
 
 try {
-	const batchResponse = await deviceManager.batchGetDeviceStatus({
-		deviceNameList: deviceNames,
+	const batchResponse = await deviceManager.batchQueryDeviceDetails({
+		productKey: 'your-product-key',
+		deviceNames,
 	});
 
 	if (client.checkResponse(batchResponse)) {
@@ -159,33 +160,26 @@ try {
 		});
 	}
 } catch (error) {
-	console.error('批量查询失败:', error);
+	console.error('批量查询详情失败:', error);
 }
 ```
 
-### 6. 发送 RRPC 消息
+### 6. 查询产品下设备列表
 
 ```javascript
-// 发送RRPC消息
+// 分页查询产品下设备列表
 try {
-	const rrpcResponse = await deviceManager.sendRrpcMessage({
-		deviceName: 'your-device-name',
+	const listResponse = await deviceManager.queryDevicesByProduct({
 		productKey: 'your-product-key',
-		messageContent: 'Hello Device',
-		timeout: 5000,
+		page: 1,
+		pageSize: 20,
 	});
 
-	if (client.checkResponse(rrpcResponse)) {
-		if (rrpcResponse.payloadBase64Byte) {
-			const decodedResponse = Buffer.from(
-				rrpcResponse.payloadBase64Byte,
-				'base64'
-			).toString('utf-8');
-			console.log(`设备响应: ${decodedResponse}`);
-		}
+	if (client.checkResponse(listResponse)) {
+		console.log('设备列表查询成功');
 	}
 } catch (error) {
-	console.error('RRPC消息发送失败:', error);
+	console.error('设备列表查询失败:', error);
 }
 ```
 
@@ -258,13 +252,15 @@ const config = {
 			console.log(`设备状态: ${status}`);
 		}
 
-		// 发送指令
-		const commandJson = JSON.stringify({ command: 'refresh' });
-		await deviceManager.sendRrpcMessage({
-			deviceName,
-			productKey: config.productKey,
-			messageContent: commandJson,
-		});
+		// 下发异步自定义指令
+		const messageContent = JSON.stringify({ command: 'refresh' });
+		await client.makeRequest(
+			'/api/v1/device/down/record/add/custom',
+			{
+				deviceName,
+				messageContent: Buffer.from(messageContent).toString('base64'),
+			}
+		);
 
 		// 其他操作...
 	} catch (error) {
@@ -275,7 +271,7 @@ const config = {
 
 ## 示例代码
 
-参见 `examples` 目录下的示例文件，特别是 `product_examples.js`，展示了如何使用应用凭证初始化客户端并执行各种产品操作。
+参见 `examples` 目录下的示例文件，特别是 `product_test.js` 与 `device_examples.js`，展示了如何初始化客户端并执行常用操作。
 
 ## 异常处理
 

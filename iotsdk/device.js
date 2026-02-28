@@ -7,6 +7,64 @@ class DeviceManager {
 		this.client = client;
 	}
 
+	#normalizeRegisterArgs(productKeyOrParams, deviceName, nickName) {
+		if (
+			productKeyOrParams &&
+			typeof productKeyOrParams === 'object' &&
+			!Array.isArray(productKeyOrParams)
+		) {
+			return {
+				productKey: productKeyOrParams.productKey,
+				deviceName: productKeyOrParams.deviceName,
+				nickName: productKeyOrParams.nickName,
+			};
+		}
+		return { productKey: productKeyOrParams, deviceName, nickName };
+	}
+
+	#normalizeDeviceIdentityArgs(deviceNameOrParams, deviceId) {
+		if (
+			deviceNameOrParams &&
+			typeof deviceNameOrParams === 'object' &&
+			!Array.isArray(deviceNameOrParams)
+		) {
+			return {
+				deviceName: deviceNameOrParams.deviceName,
+				deviceId: deviceNameOrParams.deviceId,
+			};
+		}
+		return { deviceName: deviceNameOrParams, deviceId };
+	}
+
+	#normalizeProductQueryArgs(productKeyOrParams, page, pageSize) {
+		if (
+			productKeyOrParams &&
+			typeof productKeyOrParams === 'object' &&
+			!Array.isArray(productKeyOrParams)
+		) {
+			return {
+				productKey: productKeyOrParams.productKey,
+				page: productKeyOrParams.page ?? 1,
+				pageSize: productKeyOrParams.pageSize ?? 20,
+			};
+		}
+		return { productKey: productKeyOrParams, page, pageSize };
+	}
+
+	#normalizeBatchDetailArgs(productKeyOrParams, deviceNames) {
+		if (
+			productKeyOrParams &&
+			typeof productKeyOrParams === 'object' &&
+			!Array.isArray(productKeyOrParams)
+		) {
+			return {
+				productKey: productKeyOrParams.productKey,
+				deviceNames: productKeyOrParams.deviceNames,
+			};
+		}
+		return { productKey: productKeyOrParams, deviceNames };
+	}
+
 	/**
 	 * 注册设备
 	 * @param {string} productKey - 产品唯一标识码
@@ -15,11 +73,16 @@ class DeviceManager {
 	 * @returns {Promise<Object>}
 	 */
 	async registerDevice(productKey, deviceName, nickName) {
-		const endpoint = '/api/v1/quickdevice/register';
-		const payload = { productKey: productKey };
+		const args = this.#normalizeRegisterArgs(productKey, deviceName, nickName);
+		if (!args.productKey) {
+			throw new Error('productKey 不能为空');
+		}
 
-		if (deviceName) payload.deviceName = deviceName;
-		if (nickName) payload.nickName = nickName;
+		const endpoint = '/api/v1/quickdevice/register';
+		const payload = { productKey: args.productKey };
+
+		if (args.deviceName) payload.deviceName = args.deviceName;
+		if (args.nickName) payload.nickName = args.nickName;
 
 		const response = await this.client.makeRequest(endpoint, payload);
 
@@ -44,14 +107,15 @@ class DeviceManager {
 	 * @returns {Promise<Object>}
 	 */
 	async getDeviceDetail(deviceName, deviceId) {
-		if (!deviceName && !deviceId) {
+		const args = this.#normalizeDeviceIdentityArgs(deviceName, deviceId);
+		if (!args.deviceName && !args.deviceId) {
 			throw new Error('设备编码(deviceName)和设备ID(deviceId)至少需要提供一个');
 		}
 
 		const endpoint = '/api/v1/quickdevice/detail';
 		const payload = {};
-		if (deviceName) payload.deviceName = deviceName;
-		if (deviceId) payload.deviceId = deviceId;
+		if (args.deviceName) payload.deviceName = args.deviceName;
+		if (args.deviceId) payload.deviceId = args.deviceId;
 
 		const response = await this.client.makeRequest(endpoint, payload);
 
@@ -81,14 +145,15 @@ class DeviceManager {
 	 * @returns {Promise<Object>}
 	 */
 	async getDeviceStatus(deviceName, deviceId) {
-		if (!deviceName && !deviceId) {
+		const args = this.#normalizeDeviceIdentityArgs(deviceName, deviceId);
+		if (!args.deviceName && !args.deviceId) {
 			throw new Error('设备编码(deviceName)和设备ID(deviceId)至少需要提供一个');
 		}
 
 		const endpoint = '/api/v1/quickdevice/status';
 		const payload = {};
-		if (deviceName) payload.deviceName = deviceName;
-		if (deviceId) payload.deviceId = deviceId;
+		if (args.deviceName) payload.deviceName = args.deviceName;
+		if (args.deviceId) payload.deviceId = args.deviceId;
 
 		const response = await this.client.makeRequest(endpoint, payload);
 
@@ -149,11 +214,16 @@ class DeviceManager {
 	 * @returns {Promise<Object>}
 	 */
 	async queryDevicesByProduct(productKey, page = 1, pageSize = 20) {
+		const args = this.#normalizeProductQueryArgs(productKey, page, pageSize);
+		if (!args.productKey) {
+			throw new Error('productKey 不能为空');
+		}
+
 		const endpoint = '/api/v1/quickdevice/queryDevice';
 		const payload = {
-			productKey: productKey,
-			page: Math.max(1, page),
-			pageSize: Math.min(100, Math.max(1, pageSize)),
+			productKey: args.productKey,
+			page: Math.max(1, args.page || 1),
+			pageSize: Math.min(100, Math.max(1, args.pageSize || 20)),
 		};
 
 		const response = await this.client.makeRequest(endpoint, payload);
@@ -179,14 +249,18 @@ class DeviceManager {
 	 * @returns {Promise<Object>}
 	 */
 	async batchQueryDeviceDetails(productKey, deviceNames) {
-		if (!deviceNames || deviceNames.length === 0) {
+		const args = this.#normalizeBatchDetailArgs(productKey, deviceNames);
+		if (!args.productKey) {
+			throw new Error('productKey 不能为空');
+		}
+		if (!args.deviceNames || args.deviceNames.length === 0) {
 			throw new Error('设备名称列表不能为空');
 		}
 
 		const endpoint = '/api/v1/quickdevice/batchQueryDeviceDetail';
 		const payload = {
-			productKey: productKey,
-			deviceNames: deviceNames,
+			productKey: args.productKey,
+			deviceNames: args.deviceNames,
 		};
 
 		const response = await this.client.makeRequest(endpoint, payload);
