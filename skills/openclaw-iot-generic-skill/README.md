@@ -11,6 +11,8 @@
 ## 支持的 Action
 
 - `discover`: 查询产品物模型
+- `resolve-intent`: 输入自然语言返回候选 identifier
+- `list-writable-identifiers`: 输出可写点位清单
 - `list-devices`: 查询产品下设备列表（支持分页、过滤、分页策略）
 - `device-status`: 查询设备在线状态
 - `query-history`: 历史数据统一查询封装（推荐）
@@ -33,6 +35,8 @@ cp .env.example .env
 
 ```bash
 node index.js --action discover --productKey your-product-key
+node index.js --action resolve-intent --productKey your-product-key --query "设备状态"
+node index.js --action list-writable-identifiers --productKey your-product-key
 node index.js --action list-devices --productKey your-product-key --page 1 --pageSize 20 --status ONLINE --fetchAll true
 node index.js --action device-status --deviceName your-device-name
 node index.js --action query-history --deviceName your-device-name --identifiers temperature_1,temperature_2 --range last_24h --downSampling 10s --limit 300
@@ -45,6 +49,7 @@ node index.js --action set-props --deviceName your-device-name --points '[{"iden
 
 `discover` 默认返回压缩模型（计数 + identifier 列表），避免一次返回超大模型占用 token。
 如需完整物模型，使用 `--fullModel true`。
+默认启用物模型缓存（TTL 可配置），如需强制刷新可加 `--refreshModel true`。
 
 `query-history` 对历史数据做了统一封装：
 - 支持 `identifier` 或 `identifiers`
@@ -57,6 +62,11 @@ node index.js --action set-props --deviceName your-device-name --points '[{"iden
 - `fetchAll=true`（默认）：先拉全量再进行过滤/分页，结果准确
 - `fetchAll=false`：按服务端分页请求，网络成本更低；若同时传 `status/keyword`，过滤仅作用于当前页
 - 若平台未按 `page/pageSize` 生效，技能会自动回退到本地分页，并在返回中标记 `paginationMode=server_page_incompatible_fallback`
+
+M2 新增能力：
+- `resolve-intent`：将自然语言关键词映射到物模型候选点位/服务
+- `list-writable-identifiers`：列出可写属性，支持 `--onlyAllowed true` 与白名单联动
+- `model-cache`：按 `productKey` 缓存物模型，减少重复请求与 token 成本
 
 ## 与 OpenClaw 集成
 

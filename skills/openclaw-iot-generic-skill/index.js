@@ -2,6 +2,7 @@
 'use strict';
 
 const path = require('path');
+const fs = require('fs/promises');
 const dotenv = require('dotenv');
 
 dotenv.config({ path: path.join(__dirname, '.env') });
@@ -97,7 +98,9 @@ function parseJsonArg(raw, fallback, errorCode, fieldName) {
 function usage() {
 	return [
 		'Generic IoT skill usage:',
-		'  --action discover --productKey <productKey> [--fullModel true]',
+		'  --action discover --productKey <productKey> [--fullModel true] [--refreshModel true]',
+		'  --action resolve-intent --productKey <productKey> --query <text> [--topK 8] [--writableOnly true]',
+		'  --action list-writable-identifiers --productKey <productKey> [--onlyAllowed true]',
 		'  --action list-devices --productKey <productKey> [--page 1] [--pageSize 20] [--status ONLINE|OFFLINE|UNACTIVE] [--keyword name] [--brief true] [--fetchAll true]',
 		'  --action device-status --deviceName <deviceName>',
 		'  --action query-history --deviceName <name> [--identifier <id> | --identifiers \'["id1","id2"]\' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]',
@@ -132,6 +135,195 @@ function toPositiveInt(value, defaultValue) {
 	const num = Number.parseInt(value, 10);
 	if (Number.isNaN(num) || num <= 0) return defaultValue;
 	return num;
+}
+
+function getModelCacheConfig(args) {
+	return {
+		enabled:
+			args.useCache !== undefined
+				? isTrueFlag(args.useCache, true)
+				: isTrueFlag(process.env.IOT_MODEL_CACHE_ENABLED, true),
+		ttlMs: Math.max(
+			1000,
+			toPositiveInt(
+				args.modelCacheTtlMs || process.env.IOT_MODEL_CACHE_TTL_MS,
+				5 * 60 * 1000
+			)
+		),
+	};
+}
+
+function getModelCacheFile(productKey) {
+	const safe = String(productKey).replace(/[^a-zA-Z0-9_-]/g, '_');
+	return path.join(__dirname, '.cache', `thing-model-${safe}.json`);
+}
+
+async function readModelCache(productKey) {
+	const file = getModelCacheFile(productKey);
+	const content = await fs.readFile(file, 'utf8');
+	return JSON.parse(content);
+}
+
+async function writeModelCache(productKey, data) {
+	const dir = path.join(__dirname, '.cache');
+	await fs.mkdir(dir, { recursive: true });
+	const file = getModelCacheFile(productKey);
+	await fs.writeFile(file, JSON.stringify(data), 'utf8');
+}
+
+async function fetchThingModelWithCache(thingManager, productKey, args) {
+	const cfg = getModelCacheConfig(args);
+	const refresh = isTrueFlag(args.refreshModel, false);
+
+	if (cfg.enabled && !refresh) {
+		try {
+			const cached = await readModelCache(productKey);
+			const ageMs = Date.now() - Number(cached.cachedAt || 0);
+			if (ageMs >= 0 && ageMs <= cfg.ttlMs && cached.model) {
+				return {
+					ok: true,
+					source: 'cache',
+					model: cached.model,
+					cachedAt: cached.cachedAt,
+					ageMs,
+				};
+			}
+		} catch (_e) {
+			// Cache miss or parse issue; fall through to remote fetch.
+		}
+	}
+
+	const response = await thingManager.queryThingModel(productKey);
+	if (!response?.success) {
+		return {
+			ok: false,
+			response,
+		};
+	}
+
+	const model = response?.data || {};
+	const cachedAt = Date.now();
+	if (cfg.enabled) {
+		try {
+			await writeModelCache(productKey, { productKey, cachedAt, model });
+		} catch (_e) {
+			// Cache write failure should not block normal flow.
+		}
+	}
+
+	return {
+		ok: true,
+		source: 'remote',
+		model,
+		cachedAt,
+		ageMs: 0,
+	};
+}
+
+function buildWritableSetFromEnv() {
+	const raw = process.env.IOT_WRITABLE_IDENTIFIERS || '';
+	if (!raw.trim()) return null;
+	return new Set(
+		raw
+			.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean)
+	);
+}
+
+function extractModelEntries(model) {
+	const properties = Array.isArray(model?.properties) ? model.properties : [];
+	const events = Array.isArray(model?.events) ? model.events : [];
+	const actions = Array.isArray(model?.actions) ? model.actions : [];
+	return { properties, events, actions };
+}
+
+function isPropertyWritable(prop) {
+	return String(prop?.access_mode || '').toUpperCase().includes('WRITE');
+}
+
+function scoreCandidate(query, tokens, candidate) {
+	const text = {
+		identifier: String(candidate.identifier || '').toLowerCase(),
+		name: String(candidate.name || '').toLowerCase(),
+		desc: String(candidate.desc || '').toLowerCase(),
+	};
+	const q = query.toLowerCase();
+	let score = 0;
+	const matched = [];
+
+	if (text.identifier === q) {
+		score += 100;
+		matched.push('identifier_exact');
+	}
+	if (text.identifier.includes(q)) {
+		score += 40;
+		matched.push('identifier_contains');
+	}
+	if (text.name.includes(q)) {
+		score += 35;
+		matched.push('name_contains');
+	}
+	if (text.desc.includes(q)) {
+		score += 20;
+		matched.push('desc_contains');
+	}
+
+	for (const t of tokens) {
+		if (t.length < 2) continue;
+		if (text.identifier.includes(t)) score += 10;
+		if (text.name.includes(t)) score += 8;
+		if (text.desc.includes(t)) score += 5;
+	}
+
+	return { score, matched };
+}
+
+function buildIntentCandidates(model, query, options = {}) {
+	const { properties, events, actions } = extractModelEntries(model);
+	const topK = Math.max(1, toPositiveInt(options.topK, 8));
+	const writableOnly = isTrueFlag(options.writableOnly, false);
+	const tokens = String(query)
+		.toLowerCase()
+		.split(/[\s,，;；|/]+/)
+		.filter(Boolean);
+
+	const all = [];
+	for (const p of properties) {
+		if (writableOnly && !isPropertyWritable(p)) continue;
+		const candidate = {
+			type: 'property',
+			identifier: p.identifier,
+			name: p.name,
+			desc: p.desc,
+			access_mode: p.access_mode,
+		};
+		const scored = scoreCandidate(String(query), tokens, candidate);
+		if (scored.score > 0) all.push({ ...candidate, ...scored });
+	}
+	for (const e of events) {
+		const candidate = {
+			type: 'event',
+			identifier: e.identifier,
+			name: e.name,
+			desc: e.desc,
+		};
+		const scored = scoreCandidate(String(query), tokens, candidate);
+		if (scored.score > 0) all.push({ ...candidate, ...scored });
+	}
+	for (const a of actions) {
+		const candidate = {
+			type: 'action',
+			identifier: a.identifier,
+			name: a.name,
+			desc: a.desc,
+		};
+		const scored = scoreCandidate(String(query), tokens, candidate);
+		if (scored.score > 0) all.push({ ...candidate, ...scored });
+	}
+
+	all.sort((x, y) => y.score - x.score);
+	return all.slice(0, topK);
 }
 
 function formatDateTime(d) {
@@ -436,14 +628,7 @@ function muteConsoleForSdk() {
 }
 
 function buildWritableSet() {
-	const raw = process.env.IOT_WRITABLE_IDENTIFIERS || '';
-	if (!raw.trim()) return null;
-	return new Set(
-		raw
-			.split(',')
-			.map((s) => s.trim())
-			.filter(Boolean)
-	);
+	return buildWritableSetFromEnv();
 }
 
 function validatePointsWritable(points, writableSet) {
@@ -491,8 +676,18 @@ async function execute(action, args) {
 	if (action === 'discover') {
 		const productKey = getRequiredValue(args, 'productKey', 'IOT_DEFAULT_PRODUCT_KEY');
 		assertRequired(productKey, 'productKey');
-		const response = await thingManager.queryThingModel(productKey);
-		const model = response?.data || {};
+		const fetched = await fetchThingModelWithCache(thingManager, productKey, args);
+		if (!fetched.ok) {
+			return {
+				action,
+				productKey,
+				data: null,
+				success: false,
+				errorMessage: fetched?.response?.errorMessage || '物模型查询失败',
+			};
+		}
+
+		const model = fetched.model || {};
 		const properties = Array.isArray(model.properties) ? model.properties : [];
 		const events = Array.isArray(model.events) ? model.events : [];
 		const actions = Array.isArray(model.actions) ? model.actions : [];
@@ -500,6 +695,9 @@ async function execute(action, args) {
 		return {
 			action,
 			productKey,
+			modelSource: fetched.source,
+			modelCachedAt: fetched.cachedAt,
+			modelAgeMs: fetched.ageMs,
 			data: fullModel
 				? model
 				: {
@@ -523,8 +721,91 @@ async function execute(action, args) {
 							name: x.name,
 						})),
 					},
-			success: response?.success === true,
-			errorMessage: response?.errorMessage,
+			success: true,
+			errorMessage: null,
+		};
+	}
+
+	if (action === 'resolve-intent') {
+		const productKey = getRequiredValue(args, 'productKey', 'IOT_DEFAULT_PRODUCT_KEY');
+		assertRequired(productKey, 'productKey');
+		const query = String(args.query || args.text || '').trim();
+		assertRequired(query, 'query');
+
+		const fetched = await fetchThingModelWithCache(thingManager, productKey, args);
+		if (!fetched.ok) {
+			return {
+				action,
+				productKey,
+				query,
+				candidates: [],
+				success: false,
+				errorMessage: fetched?.response?.errorMessage || '物模型查询失败',
+			};
+		}
+
+		const candidates = buildIntentCandidates(fetched.model, query, {
+			topK: args.topK,
+			writableOnly: args.writableOnly,
+		});
+		return {
+			action,
+			productKey,
+			query,
+			topK: toPositiveInt(args.topK, 8),
+			writableOnly: isTrueFlag(args.writableOnly, false),
+			modelSource: fetched.source,
+			modelCachedAt: fetched.cachedAt,
+			modelAgeMs: fetched.ageMs,
+			candidates,
+			success: true,
+			errorMessage: null,
+		};
+	}
+
+	if (action === 'list-writable-identifiers') {
+		const productKey = getRequiredValue(args, 'productKey', 'IOT_DEFAULT_PRODUCT_KEY');
+		assertRequired(productKey, 'productKey');
+		const onlyAllowed = isTrueFlag(args.onlyAllowed, false);
+		const whitelist = buildWritableSetFromEnv();
+
+		const fetched = await fetchThingModelWithCache(thingManager, productKey, args);
+		if (!fetched.ok) {
+			return {
+				action,
+				productKey,
+				onlyAllowed,
+				data: [],
+				success: false,
+				errorMessage: fetched?.response?.errorMessage || '物模型查询失败',
+			};
+		}
+
+		const { properties } = extractModelEntries(fetched.model);
+		let writable = properties
+			.filter((p) => isPropertyWritable(p))
+			.map((p) => ({
+				identifier: p.identifier,
+				name: p.name,
+				access_mode: p.access_mode,
+			}));
+
+		if (onlyAllowed && whitelist) {
+			writable = writable.filter((x) => whitelist.has(x.identifier));
+		}
+
+		return {
+			action,
+			productKey,
+			onlyAllowed,
+			whitelistEnabled: Boolean(whitelist),
+			modelSource: fetched.source,
+			modelCachedAt: fetched.cachedAt,
+			modelAgeMs: fetched.ageMs,
+			count: writable.length,
+			data: writable,
+			success: true,
+			errorMessage: null,
 		};
 	}
 

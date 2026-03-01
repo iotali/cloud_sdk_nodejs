@@ -25,9 +25,10 @@
 
 ### M2（2-3 天）可用性增强
 
-- 增加 `model-cache`（按 `productKey` 缓存物模型，TTL 可配置）
-- 增加 `resolve-intent` 辅助动作：输入自然语言关键词，返回候选 `identifier`
-- 增加 `list-writable-identifiers`，帮助模型安全执行写操作
+- 增加 `model-cache`（按 `productKey` 缓存物模型，TTL 可配置）（已完成）
+- 增加 `resolve-intent` 辅助动作：输入自然语言关键词，返回候选 `identifier`（已完成）
+- 增加 `list-writable-identifiers`，帮助模型安全执行写操作（已完成）
+- M2 当前状态：核心能力已完成，可进入 M3
 
 ### M3（2-4 天）生产化能力
 

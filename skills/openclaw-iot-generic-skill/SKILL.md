@@ -9,41 +9,50 @@
 ## Commands
 
 1. 发现产品物模型能力  
-   `node {{SKILL_PATH}}/index.js --action discover --productKey <productKey>`
+   `node {{SKILL_PATH}}/index.js --action discover --productKey <productKey> [--refreshModel true]`
    - 默认返回压缩结果（identifier + 计数），减少 token 消耗
    - 如需完整模型：`--fullModel true`
+   - 默认启用缓存（TTL 可配），`--refreshModel true` 可强制刷新
 
-2. 查询设备在线状态  
+2. 意图解析辅助（推荐先调用）  
+   `node {{SKILL_PATH}}/index.js --action resolve-intent --productKey <productKey> --query <text> [--topK 8] [--writableOnly true]`
+   - 输入自然语言关键词，返回候选 `identifier`
+
+3. 查询可写点位清单  
+   `node {{SKILL_PATH}}/index.js --action list-writable-identifiers --productKey <productKey> [--onlyAllowed true]`
+   - 用于写操作前的安全校验
+
+4. 查询设备在线状态  
    `node {{SKILL_PATH}}/index.js --action device-status --deviceName <deviceName>`
 
-3. 查询产品设备列表  
+5. 查询产品设备列表  
    `node {{SKILL_PATH}}/index.js --action list-devices --productKey <productKey> [--page 1] [--pageSize 20] [--status ONLINE|OFFLINE|UNACTIVE] [--keyword <name>] [--brief true] [--fetchAll true]`
    - `fetchAll=true`：先拉全量再分页过滤（准确，默认）
    - `fetchAll=false`：按服务端分页查询（更省流量，过滤仅当前页）
    - 若平台分页不生效，返回会标记 `paginationMode=server_page_incompatible_fallback`
 
-4. 统一查询历史数据（推荐）  
+6. 统一查询历史数据（推荐）  
    `node {{SKILL_PATH}}/index.js --action query-history --deviceName <deviceName> [--identifier <id> | --identifiers '["id1","id2"]' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]`
    - 若不传 `startTime/endTime`，可用 `range` 快捷窗口
    - 默认会限制返回数据量，减少 token 开销
    - 优先使用 `--aggregate` 与 `--omitData true` 获取摘要，必要时再拉明细
 
-5. 查询单个属性历史  
+7. 查询单个属性历史  
    `node {{SKILL_PATH}}/index.js --action query-prop --deviceName <deviceName> --identifier <id> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]`
 
-6. 查询多个属性历史  
+8. 查询多个属性历史  
    `node {{SKILL_PATH}}/index.js --action query-props --deviceName <deviceName> --identifiers '["id1","id2"]' --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]`
 
-7. 设置设备属性  
+9. 设置设备属性  
    `node {{SKILL_PATH}}/index.js --action set-props --deviceName <deviceName> --points '[{"identifier":"power_switch","value":"1"}]' [--dryRun true]`
 
-8. 调用设备服务  
+10. 调用设备服务  
    `node {{SKILL_PATH}}/index.js --action call-service --deviceName <deviceName> --servicePoint '{"identifier":"start_device"}' [--pointList '[{"identifier":"mode","value":"2"}]'] [--dryRun true]`
 
-9. 查询设备事件  
+11. 查询设备事件  
    `node {{SKILL_PATH}}/index.js --action query-events --deviceName <deviceName> --identifier <eventId> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"`
 
-10. 查询告警  
+12. 查询告警  
    `node {{SKILL_PATH}}/index.js --action alarms --deviceName <deviceName> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>]`
 
 ## Output Contract
