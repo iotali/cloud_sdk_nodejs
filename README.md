@@ -24,6 +24,44 @@
 - 远程控制
   - 自定义指令下发（异步）
 
+## SDK 能力总览
+
+为方便快速确认“SDK 到底支持哪些功能”，下面按 Manager 维度列出已提供的方法。
+
+- `IoTClient`
+  - `createClient({ baseUrl, token })`
+  - `IoTClient.fromCredentials({ baseUrl, appId, appSecret })`
+  - `makeRequest(endpoint, payload)`、`checkResponse(response)`
+
+- `DeviceManager`（`createDeviceManager(client)`）
+  - `registerDevice(...)`：注册设备
+  - `getDeviceDetail(...)`：查询设备详情（deviceName/deviceId）
+  - `getDeviceStatus(...)`：查询设备在线状态
+  - `queryDevicesByProduct(...)`：查询产品下设备列表（分页）
+  - `batchQueryDeviceDetails(...)`：批量查询设备详情
+
+- `ThingManager`（`createThingManager(client)`）
+  - `queryThingModel(productKey)`：查询物模型
+  - `queryDevicePropertyData(...)`：查询单点属性历史
+  - `queryDevicePropertiesData(...)`：查询多点属性历史
+  - `queryDeviceServiceData(...)`：查询服务调用记录
+  - `queryDeviceEventData(...)`：查询事件记录
+  - `setDevicesProperty(...)`：设置设备属性
+  - `setBatchDevicesProperty(...)`：批量设置设备属性
+  - `invokeThingsService(...)`：调用设备服务
+  - `invokeBatchThingsService(...)`：批量调用设备服务
+
+- `ProductManager`（`createProductManager(client)`）
+  - `createProduct(params)`：创建产品
+  - `getDetail(params)`：查询产品详情
+  - `delete(params)`：删除产品
+  - `list(filter)`：分页查询产品列表
+
+- `AlarmManager`（`createAlarmManager(client)`）
+  - `queryAlarmList(params)`：查询告警列表（支持 `deviceName`、`status`、`startTime`、`endTime`）
+
+> 说明：`queryDeviceEventData` 与 `queryAlarmList` 已在当前 SDK 中提供，可直接用于事件与告警查询。
+
 ## 安装要求
 
 1. Node.js 14 或更高版本
