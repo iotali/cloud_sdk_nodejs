@@ -81,22 +81,40 @@ M2 新增能力：
 
 ## 与 OpenClaw 集成
 
-1. 复制本目录到 OpenClaw:
+### 方式一：一键远程安装（推荐）
+
+```bash
+bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/master/skills/openclaw-iot-generic-skill/install.sh") --tag v1.1.1
+```
+
+可选参数：
+- `--tag <tag-or-branch>`：安装指定版本（默认 `master`）
+- `--target <dir>`：安装目录（默认 `~/.openclaw/skills/my-iot-generic-tool`）
+- `--force`：覆盖已有目录
+- `--no-install`：跳过 `npm install`
+
+示例：
+
+```bash
+bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/master/skills/openclaw-iot-generic-skill/install.sh") \
+  --tag master \
+  --target ~/.openclaw/skills/my-iot-generic-tool \
+  --force
+```
+
+### 方式二：手动复制安装
 
 ```bash
 mkdir -p ~/.openclaw/skills/my-iot-generic-tool
 cp -r skills/openclaw-iot-generic-skill/* ~/.openclaw/skills/my-iot-generic-tool/
 cp skills/openclaw-iot-generic-skill/.env.example ~/.openclaw/skills/my-iot-generic-tool/.env
-```
-
-2. 安装依赖并填写 `.env`:
-
-```bash
 cd ~/.openclaw/skills/my-iot-generic-tool
 npm install
 ```
 
-3. 在 OpenClaw 中通过 `SKILL.md` 规则触发命令调用。
+安装后：
+1. 填写 `.env`（`IOT_BASE_URL` / `IOT_TOKEN` 或 `IOT_APP_ID+IOT_APP_SECRET`）
+2. 在 OpenClaw 中通过 `SKILL.md` 规则触发命令调用。
    诊断场景可直接复用 `TASK_TEMPLATES.md` 的多轮模板。
 
 ## 输出约定
