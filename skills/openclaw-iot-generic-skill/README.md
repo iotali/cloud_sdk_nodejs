@@ -117,6 +117,19 @@ npm install
 2. 在 OpenClaw 中通过 `SKILL.md` 规则触发命令调用。
    诊断场景可直接复用 `TASK_TEMPLATES.md` 的多轮模板。
 
+注意：
+- `IOT_BASE_URL` 请使用**不带尾部 `/`** 的形式（例如 `https://iot.know-act.com`）。
+- 若写成 `https://iot.know-act.com/`，在部分环境下鉴权可能返回 `403`。
+- 文档与命令示例中不要填写真实 `IOT_APP_ID`、`IOT_APP_SECRET`、`IOT_TOKEN`。
+- 可复现命令示例：
+
+```bash
+IOT_BASE_URL=https://your-iot-domain.com \
+IOT_APP_ID=your-app-id \
+IOT_APP_SECRET=your-app-secret \
+node index.js --action alarms --deviceName 8AOE6Mwbhj --startTime "2025-12-01 00:00:00" --endTime "2025-12-31 23:59:59"
+```
+
 ## 输出约定
 
 脚本始终输出单行 JSON：
