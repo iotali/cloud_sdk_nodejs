@@ -97,6 +97,7 @@ npm install
 ```
 
 3. 在 OpenClaw 中通过 `SKILL.md` 规则触发命令调用。
+   诊断场景可直接复用 `TASK_TEMPLATES.md` 的多轮模板。
 
 ## 输出约定
 
