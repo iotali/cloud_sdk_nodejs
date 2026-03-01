@@ -33,6 +33,58 @@ function respond(ok, payload, exitCode = ok ? 0 : 1) {
 	process.exit(exitCode);
 }
 
+function createRequestId() {
+	const rand = Math.random().toString(36).slice(2, 8);
+	return `req_${Date.now()}_${rand}`;
+}
+
+function classifyErrorType(errorCode, message) {
+	const code = String(errorCode || '').toUpperCase();
+	const msg = String(message || '').toLowerCase();
+
+	if (
+		code.startsWith('MISSING_') ||
+		code.startsWith('INVALID_') ||
+		code === 'WRITE_GUARD_BLOCKED'
+	) {
+		return 'validation_error';
+	}
+	if (
+		code.includes('AUTH') ||
+		msg.includes('token') ||
+		msg.includes('auth') ||
+		msg.includes('认证') ||
+		msg.includes('401') ||
+		msg.includes('403')
+	) {
+		return 'auth_error';
+	}
+	if (
+		msg.includes('enotfound') ||
+		msg.includes('econnrefused') ||
+		msg.includes('etimedout') ||
+		msg.includes('network') ||
+		msg.includes('timeout') ||
+		msg.includes('socket hang up')
+	) {
+		return 'network_error';
+	}
+	if (code === 'API_FAILED') {
+		return 'platform_error';
+	}
+	return 'unknown_error';
+}
+
+function normalizeThrownError(error) {
+	const rawMessage = error?.message || '未知错误';
+	const [maybeCode, ...rest] = rawMessage.split(':');
+	const hasCode = rest.length > 0;
+	const errorCode = hasCode ? maybeCode : 'UNEXPECTED_ERROR';
+	const message = hasCode ? rest.join(':').trim() : rawMessage;
+	const errorType = classifyErrorType(errorCode, message);
+	return { errorCode, errorType, message };
+}
+
 function parseJsonArg(raw, fallback, errorCode, fieldName) {
 	if (raw === undefined || raw === null || raw === '') return fallback;
 	try {
@@ -46,7 +98,9 @@ function usage() {
 	return [
 		'Generic IoT skill usage:',
 		'  --action discover --productKey <productKey> [--fullModel true]',
+		'  --action list-devices --productKey <productKey> [--page 1] [--pageSize 20] [--status ONLINE|OFFLINE|UNACTIVE] [--keyword name] [--brief true] [--fetchAll true]',
 		'  --action device-status --deviceName <deviceName>',
+		'  --action query-history --deviceName <name> [--identifier <id> | --identifiers \'["id1","id2"]\' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]',
 		'  --action query-prop --deviceName <name> --identifier <id> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
 		'  --action query-props --deviceName <name> --identifiers \'["id1","id2"]\' --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
 		'  --action set-props --deviceName <name> --points \'[{"identifier":"power","value":"1"}]\' [--dryRun true]',
@@ -72,6 +126,277 @@ function isDryRun(args) {
 function isTrueFlag(v, defaultValue = false) {
 	if (v === undefined) return defaultValue;
 	return String(v).toLowerCase() !== 'false';
+}
+
+function toPositiveInt(value, defaultValue) {
+	const num = Number.parseInt(value, 10);
+	if (Number.isNaN(num) || num <= 0) return defaultValue;
+	return num;
+}
+
+function formatDateTime(d) {
+	const yyyy = d.getFullYear();
+	const mm = String(d.getMonth() + 1).padStart(2, '0');
+	const dd = String(d.getDate()).padStart(2, '0');
+	const hh = String(d.getHours()).padStart(2, '0');
+	const mi = String(d.getMinutes()).padStart(2, '0');
+	const ss = String(d.getSeconds()).padStart(2, '0');
+	return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+}
+
+function resolveTimeWindow(args) {
+	if (args.startTime && args.endTime) {
+		return {
+			startTime: args.startTime,
+			endTime: args.endTime,
+			source: 'explicit',
+		};
+	}
+
+	const range = String(args.range || 'last_1h').toLowerCase();
+	const now = new Date();
+	const start = new Date(now.getTime());
+	if (range === 'last_1h') start.setHours(start.getHours() - 1);
+	else if (range === 'last_6h') start.setHours(start.getHours() - 6);
+	else if (range === 'last_24h') start.setDate(start.getDate() - 1);
+	else if (range === 'last_7d') start.setDate(start.getDate() - 7);
+	else {
+		throw new Error(
+			'INVALID_ARG:range 仅支持 last_1h|last_6h|last_24h|last_7d，或显式 startTime/endTime'
+		);
+	}
+
+	return {
+		startTime: formatDateTime(start),
+		endTime: formatDateTime(now),
+		source: range,
+	};
+}
+
+function resolveIdentifiers(args) {
+	if (args.identifier) return [String(args.identifier)];
+	if (!args.identifiers) {
+		throw new Error('MISSING_ARG:identifier 或 identifiers 至少提供一个');
+	}
+
+	try {
+		const parsed = JSON.parse(args.identifiers);
+		if (!Array.isArray(parsed) || parsed.length === 0) {
+			throw new Error('INVALID_ARG:identifiers JSON 必须是非空数组');
+		}
+		return parsed.map((x) => String(x));
+	} catch (_e) {
+		const split = String(args.identifiers)
+			.split(',')
+			.map((s) => s.trim())
+			.filter(Boolean);
+		if (split.length === 0) {
+			throw new Error('INVALID_ARG:identifiers 必须是 JSON 数组或逗号分隔字符串');
+		}
+		return split;
+	}
+}
+
+function trimHistoryData(data, limit) {
+	if (!limit || limit <= 0) return data;
+	if (Array.isArray(data)) {
+		// Case A: direct points array
+		if (
+			data.length > 0 &&
+			(data[0]?.time !== undefined || data[0]?.value !== undefined)
+		) {
+			return data.slice(-limit);
+		}
+		// Case B: series array [{ dataList: [...] , point: {...} }]
+		return data.map((item) => {
+			if (item && Array.isArray(item.dataList)) {
+				return { ...item, dataList: item.dataList.slice(-limit) };
+			}
+			return item;
+		});
+	}
+	if (!data || typeof data !== 'object') return data;
+
+	// Case C: single series object { dataList: [...], point: {...} }
+	if (Array.isArray(data.dataList)) {
+		return { ...data, dataList: data.dataList.slice(-limit) };
+	}
+
+	const output = {};
+	for (const [k, v] of Object.entries(data)) {
+		output[k] = Array.isArray(v) ? v.slice(-limit) : v;
+	}
+	return output;
+}
+
+function buildHistorySummary(data) {
+	if (Array.isArray(data)) {
+		// Case A: direct points array
+		if (
+			data.length > 0 &&
+			(data[0]?.time !== undefined || data[0]?.value !== undefined)
+		) {
+			return {
+				seriesCount: 1,
+				totalPoints: data.length,
+			};
+		}
+		// Case B: series array [{ dataList: [...] }]
+		let totalPoints = 0;
+		for (const item of data) {
+			if (item && Array.isArray(item.dataList)) {
+				totalPoints += item.dataList.length;
+			}
+		}
+		return {
+			seriesCount: data.length,
+			totalPoints,
+		};
+	}
+	if (!data || typeof data !== 'object') {
+		return { seriesCount: 0, totalPoints: 0 };
+	}
+
+	// Case C: single series object { dataList: [...] }
+	if (Array.isArray(data.dataList)) {
+		return {
+			seriesCount: 1,
+			totalPoints: data.dataList.length,
+		};
+	}
+
+	let total = 0;
+	let seriesCount = 0;
+	for (const v of Object.values(data)) {
+		seriesCount += 1;
+		if (Array.isArray(v)) total += v.length;
+	}
+	return { seriesCount, totalPoints: total };
+}
+
+function normalizeHistorySeries(data) {
+	const series = [];
+	if (Array.isArray(data)) {
+		// Direct points array
+		if (
+			data.length > 0 &&
+			(data[0]?.time !== undefined || data[0]?.value !== undefined)
+		) {
+			series.push({
+				identifier: null,
+				name: null,
+				points: data,
+			});
+			return series;
+		}
+
+		// Series array
+		for (const item of data) {
+			if (item && Array.isArray(item.dataList)) {
+				series.push({
+					identifier: item?.point?.identifier || null,
+					name: item?.point?.name || null,
+					points: item.dataList,
+				});
+			}
+		}
+		return series;
+	}
+
+	if (!data || typeof data !== 'object') {
+		return series;
+	}
+
+	// Single series object
+	if (Array.isArray(data.dataList)) {
+		series.push({
+			identifier: data?.point?.identifier || null,
+			name: data?.point?.name || null,
+			points: data.dataList,
+		});
+		return series;
+	}
+
+	// Object map: { idA: [...], idB: [...] }
+	for (const [k, v] of Object.entries(data)) {
+		if (Array.isArray(v)) {
+			series.push({
+				identifier: k,
+				name: null,
+				points: v,
+			});
+		}
+	}
+	return series;
+}
+
+function resolveAggregateModes(raw) {
+	const input = String(raw || 'latest').trim().toLowerCase();
+	if (input === 'none') return [];
+	if (input === 'all') return ['latest', 'min', 'max', 'avg', 'count'];
+	return input
+		.split(',')
+		.map((s) => s.trim())
+		.filter(Boolean);
+}
+
+function buildHistoryAggregates(data, modes) {
+	if (!Array.isArray(modes) || modes.length === 0) return [];
+	const modeSet = new Set(modes);
+	const series = normalizeHistorySeries(data);
+
+	return series.map((s) => {
+		const numericPoints = s.points
+			.map((p) => {
+				const value = Number(p?.value);
+				return {
+					time: p?.time ?? null,
+					value,
+					valid: Number.isFinite(value),
+				};
+			})
+			.filter((p) => p.valid);
+
+		const result = {
+			identifier: s.identifier,
+			name: s.name,
+		};
+
+		if (modeSet.has('count')) {
+			result.count = s.points.length;
+			result.numericCount = numericPoints.length;
+		}
+
+		if (modeSet.has('latest')) {
+			const last = s.points[s.points.length - 1] || null;
+			result.latest = last
+				? { time: last.time ?? null, value: last.value ?? null }
+				: null;
+		}
+
+		if (numericPoints.length > 0) {
+			if (modeSet.has('min')) {
+				let min = numericPoints[0];
+				for (const p of numericPoints) {
+					if (p.value < min.value) min = p;
+				}
+				result.min = { time: min.time, value: min.value };
+			}
+			if (modeSet.has('max')) {
+				let max = numericPoints[0];
+				for (const p of numericPoints) {
+					if (p.value > max.value) max = p;
+				}
+				result.max = { time: max.time, value: max.value };
+			}
+			if (modeSet.has('avg')) {
+				const sum = numericPoints.reduce((acc, p) => acc + p.value, 0);
+				result.avg = sum / numericPoints.length;
+			}
+		}
+
+		return result;
+	});
 }
 
 function isQuietMode(args) {
@@ -211,6 +536,174 @@ async function execute(action, args) {
 			action,
 			deviceName,
 			data: response?.data ?? null,
+			success: response?.success === true,
+			errorMessage: response?.errorMessage,
+		};
+	}
+
+	if (action === 'query-history') {
+		const deviceName = getRequiredValue(args, 'deviceName', 'IOT_DEFAULT_DEVICE_NAME');
+		assertRequired(deviceName, 'deviceName');
+		const identifiers = resolveIdentifiers(args);
+		const timeWindow = resolveTimeWindow(args);
+		const downSampling = args.downSampling || '1s';
+		const limit = Math.min(2000, toPositiveInt(args.limit, 200));
+		const aggregateModes = resolveAggregateModes(args.aggregate);
+		const omitData = isTrueFlag(args.omitData, false);
+
+		let response;
+		if (identifiers.length === 1) {
+			response = await thingManager.queryDevicePropertyData(
+				deviceName,
+				identifiers[0],
+				timeWindow.startTime,
+				timeWindow.endTime,
+				downSampling
+			);
+		} else {
+			response = await thingManager.queryDevicePropertiesData(
+				deviceName,
+				identifiers,
+				timeWindow.startTime,
+				timeWindow.endTime,
+				downSampling
+			);
+		}
+
+		const rawData = response?.data ?? null;
+		const trimmed = trimHistoryData(rawData, limit);
+		const aggregates = buildHistoryAggregates(trimmed, aggregateModes);
+		return {
+			action,
+			deviceName,
+			identifiers,
+			timeWindow,
+			downSampling,
+			limit,
+			aggregateModes,
+			summary: buildHistorySummary(trimmed),
+			aggregates,
+			data: omitData ? null : trimmed,
+			success: response?.success === true,
+			errorMessage: response?.errorMessage,
+		};
+	}
+
+	if (action === 'list-devices') {
+		const productKey = getRequiredValue(args, 'productKey', 'IOT_DEFAULT_PRODUCT_KEY');
+		assertRequired(productKey, 'productKey');
+		const page = toPositiveInt(args.page, 1);
+		const pageSize = Math.min(100, toPositiveInt(args.pageSize, 20));
+		const status = args.status ? String(args.status).toUpperCase() : null;
+		const keyword = args.keyword ? String(args.keyword).trim() : '';
+		const brief = isTrueFlag(args.brief, true);
+		const fetchAll = isTrueFlag(args.fetchAll, true);
+
+		let response;
+		let devices;
+		let paginationMode;
+		let note = null;
+
+		if (fetchAll) {
+			response = await deviceManager.queryDevicesByProduct({
+				productKey,
+				page: 1,
+				pageSize: 100,
+			});
+			devices = Array.isArray(response?.data) ? response.data : [];
+			paginationMode = 'client_full_scan';
+		} else {
+			response = await deviceManager.queryDevicesByProduct({
+				productKey,
+				page,
+				pageSize,
+			});
+			devices = Array.isArray(response?.data) ? response.data : [];
+			paginationMode = 'server_page';
+			if (status || keyword) {
+				note =
+					'fetchAll=false 时过滤仅作用于当前页，若需全量精确过滤请使用 fetchAll=true';
+			}
+		}
+
+		let filtered = devices;
+		if (status) {
+			filtered = filtered.filter((d) => String(d?.status || '').toUpperCase() === status);
+		}
+		if (keyword) {
+			filtered = filtered.filter((d) =>
+				String(d?.deviceName || '')
+					.toLowerCase()
+					.includes(keyword.toLowerCase())
+			);
+		}
+
+		const statusCounts = filtered.reduce(
+			(acc, d) => {
+				const s = String(d?.status || 'UNKNOWN').toUpperCase();
+				acc[s] = (acc[s] || 0) + 1;
+				return acc;
+			},
+			{}
+		);
+
+		let pageItems;
+		let hasMore;
+		let total;
+		if (fetchAll) {
+			const start = (page - 1) * pageSize;
+			const end = start + pageSize;
+			pageItems = filtered.slice(start, end);
+			hasMore = end < filtered.length;
+			total = filtered.length;
+		} else {
+			if (devices.length > pageSize) {
+				// Some platform deployments ignore page/pageSize. Fall back to local paging.
+				const start = (page - 1) * pageSize;
+				const end = start + pageSize;
+				pageItems = filtered.slice(start, end);
+				hasMore = end < filtered.length;
+				total = filtered.length;
+				paginationMode = 'server_page_incompatible_fallback';
+				note =
+					'平台疑似未按 page/pageSize 分页，已自动回退为本地分页；建议使用 fetchAll=true';
+			} else {
+				pageItems = filtered;
+				hasMore = devices.length >= pageSize;
+				total = filtered.length;
+			}
+		}
+
+		const items = brief
+			? pageItems.map((d) => ({
+					deviceName: d.deviceName,
+					deviceId: d.deviceId,
+					status: d.status,
+					lastOnlineTime: d.lastOnlineTime,
+					timestamp: d.timestamp,
+				}))
+			: pageItems;
+
+		return {
+			action,
+			productKey,
+			page,
+			pageSize,
+			total,
+			returned: items.length,
+			hasMore,
+			paginationMode,
+			note,
+			filters: {
+				status,
+				keyword: keyword || null,
+				brief,
+				fetchAll,
+			},
+			data: {
+				statusCounts,
+				items,
+			},
 			success: response?.success === true,
 			errorMessage: response?.errorMessage,
 		};
@@ -394,46 +887,65 @@ async function execute(action, args) {
 
 async function main() {
 	const args = parseArgs(process.argv.slice(2));
+	const requestId = args.requestId || createRequestId();
+	const startedAt = Date.now();
+
+	let restoreConsole = null;
+	const finish = (ok, payload, exitCode = ok ? 0 : 1) => {
+		if (restoreConsole) restoreConsole();
+		const elapsedMs = Date.now() - startedAt;
+		respond(
+			ok,
+			{
+				requestId,
+				elapsedMs,
+				...payload,
+			},
+			exitCode
+		);
+	};
+
 	if (args.help || args.h) {
-		respond(true, { message: usage() }, 0);
+		finish(true, { message: usage() }, 0);
 	}
 
 	const action = String(args.action || '').trim().toLowerCase();
 	if (!action) {
-		respond(false, {
+		finish(false, {
 			errorCode: 'MISSING_ACTION',
+			errorType: 'validation_error',
 			message: '缺少 --action',
 			usage: usage(),
 		});
 	}
 
 	try {
-		let restoreConsole = null;
 		if (isQuietMode(args)) {
 			restoreConsole = muteConsoleForSdk();
 		}
 
 		const result = await execute(action, args);
-		if (restoreConsole) restoreConsole();
 
 		if (!result.success) {
-			respond(false, {
+			const errorCode = 'API_FAILED';
+			const message = result.errorMessage || '接口调用失败';
+			const errorType = classifyErrorType(errorCode, message);
+			finish(false, {
 				action,
-				errorCode: 'API_FAILED',
-				message: result.errorMessage || '接口调用失败',
+				errorCode,
+				errorType,
+				message,
 				data: result.data ?? null,
 			});
 		}
-		respond(true, result, 0);
+		finish(true, result, 0);
 	} catch (error) {
-		// Ensure stdout remains parseable JSON even after failures.
-		const rawMessage = error?.message || '未知错误';
-		const [maybeCode, ...rest] = rawMessage.split(':');
-		const hasCode = rest.length > 0;
-		respond(false, {
+		const normalized = normalizeThrownError(error);
+		finish(false, {
 			action,
-			errorCode: hasCode ? maybeCode : 'UNEXPECTED_ERROR',
-			message: hasCode ? rest.join(':').trim() : rawMessage,
+			errorCode: normalized.errorCode,
+			errorType: normalized.errorType,
+			message: normalized.message,
 		});
 	}
 }
