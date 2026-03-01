@@ -1,0 +1,16 @@
+{
+	"name": "openclaw-iot-generic-skill",
+	"version": "0.1.0",
+	"private": true,
+	"description": "OpenClaw generic IoT skill powered by thing model",
+	"main": "index.js",
+	"type": "commonjs",
+	"scripts": {
+		"start": "node index.js",
+		"help": "node index.js --help"
+	},
+	"dependencies": {
+		"@iotali/cloud-sdk-nodejs": "git+https://github.com/iotali/cloud_sdk_nodejs.git#v1.1.1",
+		"dotenv": "^16.4.5"
+	}
+}
