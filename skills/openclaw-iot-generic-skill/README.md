@@ -42,10 +42,12 @@ node index.js --action device-status --deviceName your-device-name
 node index.js --action query-history --deviceName your-device-name --identifiers temperature_1,temperature_2 --range last_24h --downSampling 10s --limit 300
 node index.js --action query-history --deviceName your-device-name --identifier temperature_1 --range last_24h --aggregate latest,avg,max --omitData true
 node index.js --action set-props --deviceName your-device-name --points '[{"identifier":"power_switch","value":"1"}]' --dryRun true
+node index.js --action call-service --deviceName your-device-name --servicePoint '{"identifier":"reboot"}' --pointList '[]' --confirm true
 ```
 
 默认会静默 SDK 日志，仅输出一行 JSON 到 stdout（`IOT_SKILL_QUIET=true`）。
 若需要排查问题，可临时加 `--quiet false` 查看详细日志。
+同时会向 `stderr` 输出结构化日志（默认开启，`IOT_STRUCTURED_LOG_ENABLED=true`），包含 action、耗时、结果码、请求摘要、重试信息。
 
 `discover` 默认返回压缩模型（计数 + identifier 列表），避免一次返回超大模型占用 token。
 如需完整物模型，使用 `--fullModel true`。
@@ -62,6 +64,15 @@ node index.js --action set-props --deviceName your-device-name --points '[{"iden
 - `fetchAll=true`（默认）：先拉全量再进行过滤/分页，结果准确
 - `fetchAll=false`：按服务端分页请求，网络成本更低；若同时传 `status/keyword`，过滤仅作用于当前页
 - 若平台未按 `page/pageSize` 生效，技能会自动回退到本地分页，并在返回中标记 `paginationMode=server_page_incompatible_fallback`
+
+M3 新增能力：
+- 结构化日志：`stderr` 输出 JSON 单行日志（不污染 `stdout`）
+- 读操作韧性：自动超时和指数退避重试（默认 `10000ms / 2 次 / 300ms`）
+  - 读超时（`READ_TIMEOUT`）会按同样策略自动重试，并在结构化日志中记录 `retryCount/retries`
+- 风险策略（基于 `.env`）：
+  - `IOT_ALLOW_WRITE=false` 可全局禁写
+  - 夜间限制：`IOT_WRITE_NIGHT_BLOCK_ENABLED=true` + `IOT_WRITE_NIGHT_START/END`
+  - 敏感操作二次确认：`IOT_SENSITIVE_ACTIONS=call-service,set-props` 后需传 `--confirm true`
 
 M2 新增能力：
 - `resolve-intent`：将自然语言关键词映射到物模型候选点位/服务
@@ -110,5 +121,6 @@ npm install
 ## 安全建议
 
 - 使用 `IOT_WRITABLE_IDENTIFIERS` 限制可写点位
+- 使用 `IOT_ALLOW_WRITE`、`IOT_WRITE_NIGHT_BLOCK_ENABLED`、`IOT_SENSITIVE_ACTIONS` 做分层风控
 - 对写操作先使用 `--dryRun true` 预演
 - 不在日志或提示词中输出任何密钥

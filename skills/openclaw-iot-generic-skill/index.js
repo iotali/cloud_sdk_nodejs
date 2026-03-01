@@ -46,7 +46,10 @@ function classifyErrorType(errorCode, message) {
 	if (
 		code.startsWith('MISSING_') ||
 		code.startsWith('INVALID_') ||
-		code === 'WRITE_GUARD_BLOCKED'
+		code === 'WRITE_GUARD_BLOCKED' ||
+		code === 'WRITE_DISABLED' ||
+		code === 'WRITE_NIGHT_BLOCKED' ||
+		code === 'SENSITIVE_ACTION_CONFIRM_REQUIRED'
 	) {
 		return 'validation_error';
 	}
@@ -66,7 +69,8 @@ function classifyErrorType(errorCode, message) {
 		msg.includes('etimedout') ||
 		msg.includes('network') ||
 		msg.includes('timeout') ||
-		msg.includes('socket hang up')
+		msg.includes('socket hang up') ||
+		code === 'READ_TIMEOUT'
 	) {
 		return 'network_error';
 	}
@@ -106,11 +110,12 @@ function usage() {
 		'  --action query-history --deviceName <name> [--identifier <id> | --identifiers \'["id1","id2"]\' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]',
 		'  --action query-prop --deviceName <name> --identifier <id> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
 		'  --action query-props --deviceName <name> --identifiers \'["id1","id2"]\' --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
-		'  --action set-props --deviceName <name> --points \'[{"identifier":"power","value":"1"}]\' [--dryRun true]',
-		'  --action call-service --deviceName <name> --servicePoint \'{"identifier":"start"}\' [--pointList \'[]\'] [--dryRun true]',
+		'  --action set-props --deviceName <name> --points \'[{"identifier":"power","value":"1"}]\' [--dryRun true] [--confirm true]',
+		'  --action call-service --deviceName <name> --servicePoint \'{"identifier":"start"}\' [--pointList \'[]\'] [--dryRun true] [--confirm true]',
 		'  --action query-events --deviceName <name> --identifier <eventId> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"',
 		'  --action alarms --deviceName <name> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>]',
 		'  Optional: --quiet true|false (default true)',
+		'  Optional(read): --readTimeoutMs 10000 --readRetryCount 2 --readRetryDelayMs 300',
 	].join('\n');
 }
 
@@ -135,6 +140,296 @@ function toPositiveInt(value, defaultValue) {
 	const num = Number.parseInt(value, 10);
 	if (Number.isNaN(num) || num <= 0) return defaultValue;
 	return num;
+}
+
+function toInteger(value, defaultValue) {
+	const num = Number.parseInt(value, 10);
+	if (Number.isNaN(num)) return defaultValue;
+	return num;
+}
+
+function clampNumber(value, min, max) {
+	return Math.max(min, Math.min(max, value));
+}
+
+function sleep(ms) {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const READ_ACTIONS = new Set([
+	'discover',
+	'resolve-intent',
+	'list-writable-identifiers',
+	'list-devices',
+	'device-status',
+	'query-history',
+	'query-prop',
+	'query-props',
+	'query-events',
+	'alarms',
+]);
+
+const WRITE_ACTIONS = new Set(['set-props', 'call-service']);
+
+function getResilienceConfig(args) {
+	return {
+		readTimeoutMs: clampNumber(
+			toPositiveInt(args.readTimeoutMs || process.env.IOT_READ_TIMEOUT_MS, 10000),
+			100,
+			120000
+		),
+		readRetryCount: clampNumber(
+			toInteger(args.readRetryCount || process.env.IOT_READ_RETRY_COUNT, 2),
+			0,
+			5
+		),
+		readRetryDelayMs: clampNumber(
+			Math.max(
+				0,
+				toInteger(args.readRetryDelayMs || process.env.IOT_READ_RETRY_DELAY_MS, 300)
+			),
+			0,
+			10000
+		),
+	};
+}
+
+async function withTimeout(taskFactory, timeoutMs, timeoutMessage) {
+	let timer = null;
+	try {
+		return await Promise.race([
+			taskFactory(),
+			new Promise((_, reject) => {
+				timer = setTimeout(() => {
+					reject(new Error(`READ_TIMEOUT:${timeoutMessage}`));
+				}, timeoutMs);
+			}),
+		]);
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
+}
+
+async function invokeIoTOperation({
+	action,
+	args,
+	operationName,
+	taskFactory,
+	runtimeMeta,
+}) {
+	const cfg = getResilienceConfig(args);
+	const canRetry = READ_ACTIONS.has(action);
+	const maxAttempts = canRetry ? cfg.readRetryCount + 1 : 1;
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+		try {
+			if (canRetry) {
+				return await withTimeout(
+					taskFactory,
+					cfg.readTimeoutMs,
+					`${action}.${operationName} ${cfg.readTimeoutMs}ms`
+				);
+			}
+			return await taskFactory();
+		} catch (error) {
+			const normalized = normalizeThrownError(error);
+			const isRetriable = canRetry && normalized.errorType === 'network_error';
+			const hasNextAttempt = attempt < maxAttempts;
+			if (!isRetriable || !hasNextAttempt) {
+				throw error;
+			}
+
+			const delayMs = cfg.readRetryDelayMs * 2 ** (attempt - 1);
+			if (runtimeMeta) {
+				runtimeMeta.retries.push({
+					action,
+					operationName,
+					attempt,
+					errorCode: normalized.errorCode,
+					errorType: normalized.errorType,
+					delayMs,
+				});
+			}
+			if (delayMs > 0) await sleep(delayMs);
+		}
+	}
+
+	throw new Error('UNEXPECTED_ERROR:invokeIoTOperation 执行异常');
+}
+
+function parseActionList(raw) {
+	return String(raw || '')
+		.split(',')
+		.map((x) => x.trim().toLowerCase())
+		.filter(Boolean);
+}
+
+function parseHourMinute(raw, fallback) {
+	const value = String(raw || fallback);
+	const matched = value.match(/^(\d{1,2}):(\d{1,2})$/);
+	if (!matched) return fallback;
+	const hh = Number(matched[1]);
+	const mm = Number(matched[2]);
+	if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return fallback;
+	return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+function toMinuteOfDay(hhmm) {
+	const [hh, mm] = String(hhmm).split(':').map((x) => Number(x));
+	return hh * 60 + mm;
+}
+
+function getMinuteOfDayNow(offsetMinutes) {
+	if (offsetMinutes === null || offsetMinutes === undefined) {
+		const now = new Date();
+		return now.getHours() * 60 + now.getMinutes();
+	}
+	const utcMs = Date.now() + new Date().getTimezoneOffset() * 60000;
+	const shifted = new Date(utcMs + offsetMinutes * 60000);
+	return shifted.getUTCHours() * 60 + shifted.getUTCMinutes();
+}
+
+function isInTimeRange(current, start, end) {
+	if (start === end) return true;
+	if (start < end) return current >= start && current < end;
+	return current >= start || current < end;
+}
+
+function getWriteRiskPolicy(args) {
+	const sensitiveActions = new Set(
+		parseActionList(args.sensitiveActions || process.env.IOT_SENSITIVE_ACTIONS)
+	);
+	const timezoneOffsetMinutes = (() => {
+		const fromArg = args.writeTzOffsetMinutes;
+		const fromEnv = process.env.IOT_WRITE_TZ_OFFSET_MINUTES;
+		if (fromArg === undefined && fromEnv === undefined) return null;
+		return clampNumber(
+			toInteger(fromArg !== undefined ? fromArg : fromEnv, 0),
+			-720,
+			840
+		);
+	})();
+
+	return {
+		allowWrite: isTrueFlag(
+			args.allowWrite !== undefined ? args.allowWrite : process.env.IOT_ALLOW_WRITE,
+			true
+		),
+		nightWriteBlockEnabled: isTrueFlag(
+			args.blockNightWrite !== undefined
+				? args.blockNightWrite
+				: process.env.IOT_WRITE_NIGHT_BLOCK_ENABLED,
+			false
+		),
+		nightStart: parseHourMinute(
+			args.writeNightStart || process.env.IOT_WRITE_NIGHT_START,
+			'23:00'
+		),
+		nightEnd: parseHourMinute(
+			args.writeNightEnd || process.env.IOT_WRITE_NIGHT_END,
+			'06:00'
+		),
+		timezoneOffsetMinutes,
+		sensitiveActions,
+	};
+}
+
+function enforceWriteRiskPolicy(action, args) {
+	if (!WRITE_ACTIONS.has(action)) return;
+
+	const policy = getWriteRiskPolicy(args);
+	if (!policy.allowWrite) {
+		throw new Error('WRITE_DISABLED:环境策略禁止写操作');
+	}
+
+	if (policy.nightWriteBlockEnabled) {
+		const current = getMinuteOfDayNow(policy.timezoneOffsetMinutes);
+		const start = toMinuteOfDay(policy.nightStart);
+		const end = toMinuteOfDay(policy.nightEnd);
+		if (isInTimeRange(current, start, end)) {
+			throw new Error(
+				`WRITE_NIGHT_BLOCKED:当前处于夜间限制时段 ${policy.nightStart}-${policy.nightEnd}`
+			);
+		}
+	}
+
+	if (policy.sensitiveActions.has(action) && !isTrueFlag(args.confirm, false)) {
+		throw new Error('SENSITIVE_ACTION_CONFIRM_REQUIRED:敏感操作需传 --confirm true');
+	}
+}
+
+function estimateIdentifierCount(raw) {
+	if (!raw) return 0;
+	try {
+		const parsed = JSON.parse(raw);
+		if (Array.isArray(parsed)) return parsed.length;
+		return 1;
+	} catch (_e) {
+		return String(raw)
+			.split(',')
+			.map((x) => x.trim())
+			.filter(Boolean).length;
+	}
+}
+
+function estimatePointsCount(raw, fallback = 0) {
+	if (!raw) return fallback;
+	try {
+		const parsed = JSON.parse(raw);
+		return Array.isArray(parsed) ? parsed.length : fallback;
+	} catch (_e) {
+		return fallback;
+	}
+}
+
+function estimateServiceIdentifier(raw) {
+	if (!raw) return null;
+	try {
+		const parsed = JSON.parse(raw);
+		return parsed?.identifier ? String(parsed.identifier) : null;
+	} catch (_e) {
+		return null;
+	}
+}
+
+function buildRequestSummary(action, args) {
+	const summary = {};
+	if (!action) return summary;
+
+	if (args.productKey) summary.productKey = String(args.productKey);
+	if (args.deviceName) summary.deviceName = String(args.deviceName);
+	if (args.identifier) summary.identifier = String(args.identifier);
+	if (args.identifiers) {
+		summary.identifiersCount = estimateIdentifierCount(args.identifiers);
+	}
+	if (args.range) summary.range = String(args.range);
+	if (args.startTime && args.endTime) summary.explicitWindow = true;
+	if (args.page !== undefined) summary.page = toPositiveInt(args.page, 1);
+	if (args.pageSize !== undefined) summary.pageSize = toPositiveInt(args.pageSize, 20);
+	if (args.fetchAll !== undefined) summary.fetchAll = isTrueFlag(args.fetchAll, true);
+	if (args.status) summary.status = String(args.status);
+	if (args.keyword) summary.keyword = String(args.keyword).slice(0, 50);
+	if (args.dryRun !== undefined) summary.dryRun = isTrueFlag(args.dryRun, false);
+	if (args.points) summary.pointsCount = estimatePointsCount(args.points, 0);
+	if (args.pointList) summary.pointListCount = estimatePointsCount(args.pointList, 0);
+	if (args.servicePoint) {
+		summary.serviceIdentifier = estimateServiceIdentifier(args.servicePoint);
+	}
+	const resilience = getResilienceConfig(args);
+	summary.readTimeoutMs = resilience.readTimeoutMs;
+	summary.readRetryCount = resilience.readRetryCount;
+	return summary;
+}
+
+function writeStructuredLog(entry) {
+	if (!isTrueFlag(process.env.IOT_STRUCTURED_LOG_ENABLED, true)) return;
+	process.stderr.write(
+		`${JSON.stringify({
+			type: 'skill_log',
+			ts: new Date().toISOString(),
+			...entry,
+		})}\n`
+	);
 }
 
 function getModelCacheConfig(args) {
@@ -171,7 +466,7 @@ async function writeModelCache(productKey, data) {
 	await fs.writeFile(file, JSON.stringify(data), 'utf8');
 }
 
-async function fetchThingModelWithCache(thingManager, productKey, args) {
+async function fetchThingModelWithCache(thingManager, productKey, args, queryThingModelFn) {
 	const cfg = getModelCacheConfig(args);
 	const refresh = isTrueFlag(args.refreshModel, false);
 
@@ -193,7 +488,9 @@ async function fetchThingModelWithCache(thingManager, productKey, args) {
 		}
 	}
 
-	const response = await thingManager.queryThingModel(productKey);
+	const response = queryThingModelFn
+		? await queryThingModelFn(productKey)
+		: await thingManager.queryThingModel(productKey);
 	if (!response?.success) {
 		return {
 			ok: false,
@@ -669,14 +966,28 @@ async function createManagers() {
 	};
 }
 
-async function execute(action, args) {
+async function execute(action, args, runtimeMeta) {
+	enforceWriteRiskPolicy(action, args);
 	const { deviceManager, thingManager, alarmManager } = await createManagers();
 	const writableSet = buildWritableSet();
+	const invoke = (operationName, taskFactory) =>
+		invokeIoTOperation({
+			action,
+			args,
+			operationName,
+			taskFactory,
+			runtimeMeta,
+		});
 
 	if (action === 'discover') {
 		const productKey = getRequiredValue(args, 'productKey', 'IOT_DEFAULT_PRODUCT_KEY');
 		assertRequired(productKey, 'productKey');
-		const fetched = await fetchThingModelWithCache(thingManager, productKey, args);
+		const fetched = await fetchThingModelWithCache(
+			thingManager,
+			productKey,
+			args,
+			(pk) => invoke('queryThingModel', () => thingManager.queryThingModel(pk))
+		);
 		if (!fetched.ok) {
 			return {
 				action,
@@ -732,7 +1043,12 @@ async function execute(action, args) {
 		const query = String(args.query || args.text || '').trim();
 		assertRequired(query, 'query');
 
-		const fetched = await fetchThingModelWithCache(thingManager, productKey, args);
+		const fetched = await fetchThingModelWithCache(
+			thingManager,
+			productKey,
+			args,
+			(pk) => invoke('queryThingModel', () => thingManager.queryThingModel(pk))
+		);
 		if (!fetched.ok) {
 			return {
 				action,
@@ -769,7 +1085,12 @@ async function execute(action, args) {
 		const onlyAllowed = isTrueFlag(args.onlyAllowed, false);
 		const whitelist = buildWritableSetFromEnv();
 
-		const fetched = await fetchThingModelWithCache(thingManager, productKey, args);
+		const fetched = await fetchThingModelWithCache(
+			thingManager,
+			productKey,
+			args,
+			(pk) => invoke('queryThingModel', () => thingManager.queryThingModel(pk))
+		);
 		if (!fetched.ok) {
 			return {
 				action,
@@ -812,7 +1133,9 @@ async function execute(action, args) {
 	if (action === 'device-status') {
 		const deviceName = getRequiredValue(args, 'deviceName', 'IOT_DEFAULT_DEVICE_NAME');
 		assertRequired(deviceName, 'deviceName');
-		const response = await deviceManager.getDeviceStatus({ deviceName });
+		const response = await invoke('getDeviceStatus', () =>
+			deviceManager.getDeviceStatus({ deviceName })
+		);
 		return {
 			action,
 			deviceName,
@@ -834,20 +1157,24 @@ async function execute(action, args) {
 
 		let response;
 		if (identifiers.length === 1) {
-			response = await thingManager.queryDevicePropertyData(
-				deviceName,
-				identifiers[0],
-				timeWindow.startTime,
-				timeWindow.endTime,
-				downSampling
+			response = await invoke('queryDevicePropertyData', () =>
+				thingManager.queryDevicePropertyData(
+					deviceName,
+					identifiers[0],
+					timeWindow.startTime,
+					timeWindow.endTime,
+					downSampling
+				)
 			);
 		} else {
-			response = await thingManager.queryDevicePropertiesData(
-				deviceName,
-				identifiers,
-				timeWindow.startTime,
-				timeWindow.endTime,
-				downSampling
+			response = await invoke('queryDevicePropertiesData', () =>
+				thingManager.queryDevicePropertiesData(
+					deviceName,
+					identifiers,
+					timeWindow.startTime,
+					timeWindow.endTime,
+					downSampling
+				)
 			);
 		}
 
@@ -886,19 +1213,23 @@ async function execute(action, args) {
 		let note = null;
 
 		if (fetchAll) {
-			response = await deviceManager.queryDevicesByProduct({
-				productKey,
-				page: 1,
-				pageSize: 100,
-			});
+			response = await invoke('queryDevicesByProduct', () =>
+				deviceManager.queryDevicesByProduct({
+					productKey,
+					page: 1,
+					pageSize: 100,
+				})
+			);
 			devices = Array.isArray(response?.data) ? response.data : [];
 			paginationMode = 'client_full_scan';
 		} else {
-			response = await deviceManager.queryDevicesByProduct({
-				productKey,
-				page,
-				pageSize,
-			});
+			response = await invoke('queryDevicesByProduct', () =>
+				deviceManager.queryDevicesByProduct({
+					productKey,
+					page,
+					pageSize,
+				})
+			);
 			devices = Array.isArray(response?.data) ? response.data : [];
 			paginationMode = 'server_page';
 			if (status || keyword) {
@@ -996,12 +1327,14 @@ async function execute(action, args) {
 		assertRequired(args.identifier, 'identifier');
 		assertRequired(args.startTime, 'startTime');
 		assertRequired(args.endTime, 'endTime');
-		const response = await thingManager.queryDevicePropertyData(
-			deviceName,
-			args.identifier,
-			args.startTime,
-			args.endTime,
-			args.downSampling || '1s'
+		const response = await invoke('queryDevicePropertyData', () =>
+			thingManager.queryDevicePropertyData(
+				deviceName,
+				args.identifier,
+				args.startTime,
+				args.endTime,
+				args.downSampling || '1s'
+			)
 		);
 		return {
 			action,
@@ -1029,12 +1362,14 @@ async function execute(action, args) {
 			throw new Error('INVALID_ARG:identifiers 必须是非空数组');
 		}
 
-		const response = await thingManager.queryDevicePropertiesData(
-			deviceName,
-			identifiers,
-			args.startTime,
-			args.endTime,
-			args.downSampling || '1s'
+		const response = await invoke('queryDevicePropertiesData', () =>
+			thingManager.queryDevicePropertiesData(
+				deviceName,
+				identifiers,
+				args.startTime,
+				args.endTime,
+				args.downSampling || '1s'
+			)
 		);
 		return {
 			action,
@@ -1066,7 +1401,9 @@ async function execute(action, args) {
 			};
 		}
 
-		const response = await thingManager.setDevicesProperty(deviceName, points);
+		const response = await invoke('setDevicesProperty', () =>
+			thingManager.setDevicesProperty(deviceName, points)
+		);
 		return {
 			action,
 			deviceName,
@@ -1105,10 +1442,8 @@ async function execute(action, args) {
 			};
 		}
 
-		const response = await thingManager.invokeThingsService(
-			deviceName,
-			pointList,
-			servicePoint
+		const response = await invoke('invokeThingsService', () =>
+			thingManager.invokeThingsService(deviceName, pointList, servicePoint)
 		);
 		return {
 			action,
@@ -1125,11 +1460,13 @@ async function execute(action, args) {
 		assertRequired(args.identifier, 'identifier');
 		assertRequired(args.startTime, 'startTime');
 		assertRequired(args.endTime, 'endTime');
-		const response = await thingManager.queryDeviceEventData(
-			deviceName,
-			args.identifier,
-			args.startTime,
-			args.endTime
+		const response = await invoke('queryDeviceEventData', () =>
+			thingManager.queryDeviceEventData(
+				deviceName,
+				args.identifier,
+				args.startTime,
+				args.endTime
+			)
 		);
 		return {
 			action,
@@ -1153,7 +1490,7 @@ async function execute(action, args) {
 			throw new Error('MISSING_ARG:startTime/endTime 不能为空');
 		}
 
-		const response = await alarmManager.queryAlarmList(params);
+		const response = await invoke('queryAlarmList', () => alarmManager.queryAlarmList(params));
 		return {
 			action,
 			params,
@@ -1170,11 +1507,26 @@ async function main() {
 	const args = parseArgs(process.argv.slice(2));
 	const requestId = args.requestId || createRequestId();
 	const startedAt = Date.now();
+	const runtimeMeta = {
+		retries: [],
+	};
+	let currentAction = null;
+	let requestSummary = {};
 
 	let restoreConsole = null;
 	const finish = (ok, payload, exitCode = ok ? 0 : 1) => {
 		if (restoreConsole) restoreConsole();
 		const elapsedMs = Date.now() - startedAt;
+		writeStructuredLog({
+			requestId,
+			action: currentAction || payload.action || null,
+			ok,
+			resultCode: ok ? 'OK' : payload.errorCode || 'FAILED',
+			elapsedMs,
+			requestSummary,
+			retryCount: runtimeMeta.retries.length,
+			retries: runtimeMeta.retries,
+		});
 		respond(
 			ok,
 			{
@@ -1187,10 +1539,13 @@ async function main() {
 	};
 
 	if (args.help || args.h) {
+		currentAction = 'help';
 		finish(true, { message: usage() }, 0);
 	}
 
 	const action = String(args.action || '').trim().toLowerCase();
+	currentAction = action || null;
+	requestSummary = buildRequestSummary(currentAction, args);
 	if (!action) {
 		finish(false, {
 			errorCode: 'MISSING_ACTION',
@@ -1205,7 +1560,7 @@ async function main() {
 			restoreConsole = muteConsoleForSdk();
 		}
 
-		const result = await execute(action, args);
+		const result = await execute(action, args, runtimeMeta);
 
 		if (!result.success) {
 			const errorCode = 'API_FAILED';
