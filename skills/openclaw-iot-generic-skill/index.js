@@ -107,6 +107,7 @@ function usage() {
 		'  --action list-writable-identifiers --productKey <productKey> [--onlyAllowed true]',
 		'  --action list-devices --productKey <productKey> [--page 1] [--pageSize 20] [--status ONLINE|OFFLINE|UNACTIVE] [--keyword name] [--brief true] [--fetchAll true]',
 		'  --action device-status --deviceName <deviceName>',
+		'  --action device-detail [--deviceName <deviceName> | --deviceId <deviceId>]',
 		'  --action query-history --deviceName <name> [--identifier <id> | --identifiers \'["id1","id2"]\' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]',
 		'  --action query-prop --deviceName <name> --identifier <id> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
 		'  --action query-props --deviceName <name> --identifiers \'["id1","id2"]\' --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
@@ -162,6 +163,7 @@ const READ_ACTIONS = new Set([
 	'list-writable-identifiers',
 	'list-devices',
 	'device-status',
+	'device-detail',
 	'query-history',
 	'query-prop',
 	'query-props',
@@ -430,6 +432,20 @@ function writeStructuredLog(entry) {
 			...entry,
 		})}\n`
 	);
+}
+
+function sanitizeDeviceDetail(detail) {
+	if (!detail || typeof detail !== 'object' || Array.isArray(detail)) {
+		return detail;
+	}
+	const out = { ...detail };
+	if (Object.prototype.hasOwnProperty.call(out, 'deviceSecret')) {
+		out.deviceSecret = '***';
+	}
+	if (Object.prototype.hasOwnProperty.call(out, 'appSecret')) {
+		out.appSecret = '***';
+	}
+	return out;
 }
 
 function getModelCacheConfig(args) {
@@ -1145,6 +1161,30 @@ async function execute(action, args, runtimeMeta) {
 		};
 	}
 
+	if (action === 'device-detail') {
+		const deviceName = getRequiredValue(args, 'deviceName', 'IOT_DEFAULT_DEVICE_NAME');
+		const deviceId = args.deviceId ? String(args.deviceId).trim() : '';
+		if (!deviceName && !deviceId) {
+			throw new Error('MISSING_ARG:deviceName 或 deviceId 至少提供一个');
+		}
+		const response = await invoke('getDeviceDetail', () =>
+			deviceManager.getDeviceDetail({
+				deviceName: deviceName || undefined,
+				deviceId: deviceId || undefined,
+			})
+		);
+		const detail = sanitizeDeviceDetail(response?.data ?? null);
+		return {
+			action,
+			deviceName: detail?.deviceName || deviceName || null,
+			deviceId: detail?.deviceId || deviceId || null,
+			productKey: detail?.productKey || detail?.product_key || null,
+			data: detail,
+			success: response?.success === true,
+			errorMessage: response?.errorMessage,
+		};
+	}
+
 	if (action === 'query-history') {
 		const deviceName = getRequiredValue(args, 'deviceName', 'IOT_DEFAULT_DEVICE_NAME');
 		assertRequired(deviceName, 'deviceName');
@@ -1290,6 +1330,7 @@ async function execute(action, args, runtimeMeta) {
 			? pageItems.map((d) => ({
 					deviceName: d.deviceName,
 					deviceId: d.deviceId,
+					productKey: d.productKey || d.product_key || productKey,
 					status: d.status,
 					lastOnlineTime: d.lastOnlineTime,
 					timestamp: d.timestamp,

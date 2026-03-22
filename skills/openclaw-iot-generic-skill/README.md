@@ -15,6 +15,7 @@
 - `list-writable-identifiers`: 输出可写点位清单
 - `list-devices`: 查询产品下设备列表（支持分页、过滤、分页策略）
 - `device-status`: 查询设备在线状态
+- `device-detail`: 查询设备详情（可返回 `productKey`）
 - `query-history`: 历史数据统一查询封装（推荐）
 - `query-prop`: 查询单个属性历史
 - `query-props`: 查询多个属性历史
@@ -39,6 +40,7 @@ node index.js --action resolve-intent --productKey your-product-key --query "设
 node index.js --action list-writable-identifiers --productKey your-product-key
 node index.js --action list-devices --productKey your-product-key --page 1 --pageSize 20 --status ONLINE --fetchAll true
 node index.js --action device-status --deviceName your-device-name
+node index.js --action device-detail --deviceName your-device-name
 node index.js --action query-history --deviceName your-device-name --identifiers temperature_1,temperature_2 --range last_24h --downSampling 10s --limit 300
 node index.js --action query-history --deviceName your-device-name --identifier temperature_1 --range last_24h --aggregate latest,avg,max --omitData true
 node index.js --action set-props --deviceName your-device-name --points '[{"identifier":"power_switch","value":"1"}]' --dryRun true
@@ -64,6 +66,7 @@ node index.js --action call-service --deviceName your-device-name --servicePoint
 - `fetchAll=true`（默认）：先拉全量再进行过滤/分页，结果准确
 - `fetchAll=false`：按服务端分页请求，网络成本更低；若同时传 `status/keyword`，过滤仅作用于当前页
 - 若平台未按 `page/pageSize` 生效，技能会自动回退到本地分页，并在返回中标记 `paginationMode=server_page_incompatible_fallback`
+- 精简返回（`brief=true`）会包含 `productKey` 字段，便于后续直接联动产品级操作
 
 M3 新增能力：
 - 结构化日志：`stderr` 输出 JSON 单行日志（不污染 `stdout`）
@@ -92,6 +95,7 @@ bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/mas
 - `--target <dir>`：安装目录（默认 `~/.openclaw/skills/my-iot-generic-tool`）
 - `--force`：覆盖已有目录
 - `--no-install`：跳过 `npm install`
+- `--preserve-env`：与 `--force` 搭配，覆盖安装时自动保留旧 `.env`
 
 示例：
 
@@ -99,7 +103,8 @@ bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/mas
 bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/master/skills/openclaw-iot-generic-skill/install.sh") \
   --tag master \
   --target ~/.openclaw/skills/my-iot-generic-tool \
-  --force
+  --force \
+  --preserve-env
 ```
 
 ### 方式二：手动复制安装
@@ -116,6 +121,26 @@ npm install
 1. 填写 `.env`（`IOT_BASE_URL` / `IOT_TOKEN` 或 `IOT_APP_ID+IOT_APP_SECRET`）
 2. 在 OpenClaw 中通过 `SKILL.md` 规则触发命令调用。
    诊断场景可直接复用 `TASK_TEMPLATES.md` 的多轮模板。
+
+### 已安装实例如何升级
+
+推荐按 tag 升级，使用 `--preserve-env` 自动保留配置：
+
+```bash
+SKILL_DIR=~/.openclaw/skills/my-iot-generic-tool
+
+bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/master/skills/openclaw-iot-generic-skill/install.sh") \
+  --tag v1.1.1 \
+  --target "${SKILL_DIR}" \
+  --force \
+  --preserve-env
+```
+
+说明：
+- `--tag` 用于固定版本，建议在生产环境使用 tag 而非 `master`
+- `--preserve-env` 仅在 `--force` 时生效，用于自动保留已有 `.env`
+- 回滚方式：将 `--tag` 改为旧版本后重新执行上述升级命令
+- 批量部署时，建议统一维护一个版本号（同一批环境使用同一 tag）
 
 注意：
 - `IOT_BASE_URL` 请使用**不带尾部 `/`** 的形式（例如 `https://iot.know-act.com`）。

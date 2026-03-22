@@ -52,25 +52,28 @@
 5. 设备状态  
    `node {{SKILL_PATH}}/index.js --action device-status --deviceName <deviceName>`
 
-6. 统一历史查询（推荐）  
+6. 设备详情（可拿到 productKey）  
+   `node {{SKILL_PATH}}/index.js --action device-detail [--deviceName <deviceName> | --deviceId <deviceId>]`
+
+7. 统一历史查询（推荐）  
    `node {{SKILL_PATH}}/index.js --action query-history --deviceName <deviceName> [--identifier <id> | --identifiers '["id1","id2"]' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]`
 
-7. 单点历史  
+8. 单点历史  
    `node {{SKILL_PATH}}/index.js --action query-prop --deviceName <deviceName> --identifier <id> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]`
 
-8. 多点历史  
+9. 多点历史  
    `node {{SKILL_PATH}}/index.js --action query-props --deviceName <deviceName> --identifiers '["id1","id2"]' --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]`
 
-9. 设置属性  
+10. 设置属性  
    `node {{SKILL_PATH}}/index.js --action set-props --deviceName <deviceName> --points '[{"identifier":"power_switch","value":"1"}]' [--dryRun true] [--confirm true]`
 
-10. 调用服务  
+11. 调用服务  
     `node {{SKILL_PATH}}/index.js --action call-service --deviceName <deviceName> --servicePoint '{"identifier":"start_device"}' [--pointList '[{"identifier":"mode","value":"2"}]'] [--dryRun true] [--confirm true]`
 
-11. 事件查询  
+12. 事件查询  
     `node {{SKILL_PATH}}/index.js --action query-events --deviceName <deviceName> --identifier <eventId> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"`
 
-12. 告警查询  
+13. 告警查询  
     `node {{SKILL_PATH}}/index.js --action alarms --deviceName <deviceName> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>]`
 
 ## 多轮任务模板（入口）

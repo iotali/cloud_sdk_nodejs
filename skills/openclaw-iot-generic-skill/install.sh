@@ -7,11 +7,12 @@ TARGET_DIR="${HOME}/.openclaw/skills/my-iot-generic-tool"
 SKILL_SUBDIR="skills/openclaw-iot-generic-skill"
 FORCE="false"
 RUN_NPM_INSTALL="true"
+PRESERVE_ENV="false"
 
 print_usage() {
 	cat <<'EOF'
 Usage:
-  bash install.sh [--tag <tag-or-branch>] [--target <dir>] [--repo <owner/repo>] [--force] [--no-install]
+  bash install.sh [--tag <tag-or-branch>] [--target <dir>] [--repo <owner/repo>] [--force] [--no-install] [--preserve-env]
 
 Options:
   --tag         Git tag or branch to install from (default: master)
@@ -19,11 +20,12 @@ Options:
   --repo        GitHub repository (default: iotali/cloud_sdk_nodejs)
   --force       Overwrite existing target directory
   --no-install  Skip npm install
+  --preserve-env  Preserve existing .env when reinstalling with --force
   -h, --help    Show this help message
 
 Examples:
   bash install.sh --tag v1.1.1
-  bash install.sh --tag master --target ~/.openclaw/skills/iot-generic --force
+  bash install.sh --tag master --target ~/.openclaw/skills/iot-generic --force --preserve-env
 EOF
 }
 
@@ -47,6 +49,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--no-install)
 		RUN_NPM_INSTALL="false"
+		shift
+		;;
+	--preserve-env)
+		PRESERVE_ENV="true"
 		shift
 		;;
 	-h | --help)
@@ -75,6 +81,11 @@ done
 
 if [[ "${RUN_NPM_INSTALL}" == "true" ]] && ! command -v npm >/dev/null 2>&1; then
 	echo "Error: 'npm' is required but not installed." >&2
+	exit 1
+fi
+
+if [[ "${PRESERVE_ENV}" == "true" && "${FORCE}" != "true" ]]; then
+	echo "Error: --preserve-env requires --force" >&2
 	exit 1
 fi
 
@@ -111,6 +122,10 @@ if [[ -e "${TARGET_DIR}" && "${FORCE}" != "true" ]]; then
 fi
 
 if [[ -e "${TARGET_DIR}" && "${FORCE}" == "true" ]]; then
+	if [[ "${PRESERVE_ENV}" == "true" && -f "${TARGET_DIR}/.env" ]]; then
+		cp "${TARGET_DIR}/.env" "${TMP_DIR}/preserved.env"
+		echo "Backed up existing .env"
+	fi
 	echo "Removing existing target: ${TARGET_DIR}"
 	rm -rf "${TARGET_DIR}"
 fi
@@ -121,6 +136,11 @@ cp -R "${SOURCE_DIR}/." "${TARGET_DIR}/"
 if [[ ! -f "${TARGET_DIR}/.env" && -f "${TARGET_DIR}/.env.example" ]]; then
 	cp "${TARGET_DIR}/.env.example" "${TARGET_DIR}/.env"
 	echo "Created .env from .env.example"
+fi
+
+if [[ "${PRESERVE_ENV}" == "true" && -f "${TMP_DIR}/preserved.env" ]]; then
+	cp "${TMP_DIR}/preserved.env" "${TARGET_DIR}/.env"
+	echo "Restored preserved .env"
 fi
 
 if [[ "${RUN_NPM_INSTALL}" == "true" ]]; then
