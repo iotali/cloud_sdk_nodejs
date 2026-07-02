@@ -89,7 +89,7 @@ M2 新增能力：
 ### 方式一：一键远程安装（推荐）
 
 ```bash
-bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/master/skills/openclaw-iot-generic-skill/install.sh") --tag v1.1.3
+bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/master/skills/openclaw-iot-generic-skill/install.sh") --tag v1.1.4
 ```
 
 可选参数：
@@ -132,7 +132,7 @@ npm install
 SKILL_DIR=~/.openclaw/skills/my-iot-generic-tool
 
 bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/master/skills/openclaw-iot-generic-skill/install.sh") \
-  --tag v1.1.3 \
+  --tag v1.1.4 \
   --target "${SKILL_DIR}" \
   --force \
   --preserve-env

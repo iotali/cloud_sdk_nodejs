@@ -10,7 +10,7 @@
 		"help": "node index.js --help"
 	},
 	"dependencies": {
-		"@iotali/cloud-sdk-nodejs": "git+https://github.com/iotali/cloud_sdk_nodejs.git#v1.1.3",
+		"@iotali/cloud-sdk-nodejs": "git+https://github.com/iotali/cloud_sdk_nodejs.git#v1.1.4",
 		"dotenv": "^16.4.5"
 	}
 }

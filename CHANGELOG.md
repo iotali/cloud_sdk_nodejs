@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.4
+
+- 将 SDK 包版本号从 `1.1.1` 提升到 `1.1.4`，避免 Git tag 已更新但 `package-lock.json` 仍显示旧包版本。
+- OpenClaw IoT Generic Skill 依赖更新为 `@iotali/cloud-sdk-nodejs#v1.1.4`。
+
 ## v1.1.3
 
 - 增强 OpenClaw IoT Generic Skill 的设备昵称识别：当 `device-status` 或 `alarms` 收到“设备不存在”时，会自动按昵称/模糊名搜索设备编码后重试。
