@@ -434,18 +434,150 @@ function writeStructuredLog(entry) {
 	);
 }
 
-function sanitizeDeviceDetail(detail) {
-	if (!detail || typeof detail !== 'object' || Array.isArray(detail)) {
-		return detail;
+function sanitizeSensitiveFields(value) {
+	if (!value || typeof value !== 'object') {
+		return value;
 	}
-	const out = { ...detail };
-	if (Object.prototype.hasOwnProperty.call(out, 'deviceSecret')) {
-		out.deviceSecret = '***';
+	if (Array.isArray(value)) {
+		return value.map((item) => sanitizeSensitiveFields(item));
 	}
-	if (Object.prototype.hasOwnProperty.call(out, 'appSecret')) {
-		out.appSecret = '***';
+	const out = {};
+	for (const [key, item] of Object.entries(value)) {
+		if (['deviceSecret', 'appSecret', 'token', 'accessToken'].includes(key)) {
+			out[key] = '***';
+		} else {
+			out[key] = sanitizeSensitiveFields(item);
+		}
 	}
 	return out;
+}
+
+function isDeviceMissingResponse(response) {
+	if (response?.success === true) return false;
+	const message = String(response?.errorMessage || response?.message || '').toLowerCase();
+	return (
+		message.includes('设备不存在') ||
+		message.includes('device not exist') ||
+		message.includes('device does not exist') ||
+		message.includes('device not found')
+	);
+}
+
+function getDeviceItemsFromSearchResponse(response) {
+	const pageData = response?.data || {};
+	if (Array.isArray(pageData.content)) return pageData.content;
+	if (Array.isArray(pageData.items)) return pageData.items;
+	if (Array.isArray(response?.data)) return response.data;
+	return [];
+}
+
+function summarizeDeviceForOutput(device) {
+	if (!device || typeof device !== 'object') return null;
+	return {
+		deviceName: device.deviceName || null,
+		deviceCode: device.deviceName || device.deviceCode || null,
+		nickName: device.nickName || null,
+		deviceId: device.deviceId || null,
+		productKey: device.productKey || device.product_key || null,
+		status: device.status || null,
+	};
+}
+
+async function searchDevicesWithFallback(deviceManager, params) {
+	if (typeof deviceManager.searchDevices === 'function') {
+		return deviceManager.searchDevices(params);
+	}
+	if (!deviceManager.client || typeof deviceManager.client.makeRequest !== 'function') {
+		throw new Error('当前 SDK 不支持设备搜索，请重新安装 @iotali/cloud-sdk-nodejs');
+	}
+	const payload = {
+		page: Math.max(1, params.page || 1),
+		pageSize: Math.min(100, Math.max(1, params.pageSize || 20)),
+	};
+	if (params.productKey) payload.productKey = params.productKey;
+	if (params.keyword) payload.keyword = params.keyword;
+	if (params.status) payload.status = String(params.status).toUpperCase();
+	return deviceManager.client.makeRequest('/api/v1/quickdevice/search', payload);
+}
+
+async function resolveDeviceCodeFromKeyword({ deviceManager, args, invoke, keyword }) {
+	const value = String(keyword || '').trim();
+	if (!value) return { resolved: false, reason: 'empty_keyword' };
+
+	const productKey = getRequiredValue(args, 'productKey', 'IOT_DEFAULT_PRODUCT_KEY');
+	const response = await invoke('searchDevicesForDeviceCode', () =>
+		searchDevicesWithFallback(deviceManager, {
+			productKey,
+			keyword: value,
+			page: 1,
+			pageSize: 5,
+		})
+	);
+
+	if (response?.success !== true) {
+		return {
+			resolved: false,
+			reason: 'search_failed',
+			errorMessage: response?.errorMessage || '设备搜索失败',
+		};
+	}
+
+	const items = getDeviceItemsFromSearchResponse(response);
+	if (items.length === 0) {
+		return { resolved: false, reason: 'not_found', matches: [] };
+	}
+
+	const exactMatches = items.filter((device) => {
+		const candidates = [
+			device?.deviceName,
+			device?.deviceCode,
+			device?.nickName,
+			device?.name,
+		].map((x) => String(x || '').trim());
+		return candidates.includes(value);
+	});
+	const candidates = exactMatches.length > 0 ? exactMatches : items;
+	const total = Number(response?.data?.totalElements ?? candidates.length);
+	if (candidates.length !== 1 || (exactMatches.length === 0 && total > 1)) {
+		return {
+			resolved: false,
+			reason: 'ambiguous',
+			total,
+			matches: items.map(summarizeDeviceForOutput),
+		};
+	}
+
+	const device = candidates[0];
+	const deviceCode = device?.deviceName || device?.deviceCode;
+	if (!deviceCode) {
+		return {
+			resolved: false,
+			reason: 'missing_device_code',
+			matches: [summarizeDeviceForOutput(device)],
+		};
+	}
+
+	return {
+		resolved: true,
+		inputDeviceName: value,
+		deviceName: deviceCode,
+		deviceCode,
+		device: summarizeDeviceForOutput(device),
+	};
+}
+
+function buildDeviceResolutionFailureMessage(originalMessage, resolution) {
+	if (!resolution) return originalMessage || '设备不存在';
+	if (resolution.reason === 'ambiguous') {
+		return `设备不存在；按该名称模糊搜索到 ${resolution.total || resolution.matches?.length || 0} 台设备，请先用 list-devices --keyword 确认设备编码`;
+	}
+	if (resolution.reason === 'not_found') {
+		return '设备不存在；按该名称模糊搜索也未找到匹配设备';
+	}
+	if (resolution.reason === 'search_failed') {
+		return `设备不存在；尝试按昵称搜索失败：${resolution.errorMessage}`;
+	}
+	return originalMessage || '设备不存在';
 }
 
 function getModelCacheConfig(args) {
@@ -1149,15 +1281,36 @@ async function execute(action, args, runtimeMeta) {
 	if (action === 'device-status') {
 		const deviceName = getRequiredValue(args, 'deviceName', 'IOT_DEFAULT_DEVICE_NAME');
 		assertRequired(deviceName, 'deviceName');
-		const response = await invoke('getDeviceStatus', () =>
+		let response = await invoke('getDeviceStatus', () =>
 			deviceManager.getDeviceStatus({ deviceName })
 		);
+		let finalDeviceName = deviceName;
+		let deviceResolution = null;
+		if (isDeviceMissingResponse(response)) {
+			deviceResolution = await resolveDeviceCodeFromKeyword({
+				deviceManager,
+				args,
+				invoke,
+				keyword: deviceName,
+			});
+			if (deviceResolution.resolved) {
+				finalDeviceName = deviceResolution.deviceCode;
+				response = await invoke('getDeviceStatusResolved', () =>
+					deviceManager.getDeviceStatus({ deviceName: finalDeviceName })
+				);
+			}
+		}
+		const data = sanitizeSensitiveFields(response?.data ?? null);
 		return {
 			action,
-			deviceName,
-			data: response?.data ?? null,
+			deviceName: finalDeviceName,
+			inputDeviceName: deviceName,
+			deviceResolution,
+			data,
 			success: response?.success === true,
-			errorMessage: response?.errorMessage,
+			errorMessage: response?.success === true
+				? response?.errorMessage
+				: buildDeviceResolutionFailureMessage(response?.errorMessage, deviceResolution),
 		};
 	}
 
@@ -1173,7 +1326,7 @@ async function execute(action, args, runtimeMeta) {
 				deviceId: deviceId || undefined,
 			})
 		);
-		const detail = sanitizeDeviceDetail(response?.data ?? null);
+		const detail = sanitizeSensitiveFields(response?.data ?? null);
 		return {
 			action,
 			deviceName: detail?.deviceName || deviceName || null,
@@ -1258,7 +1411,7 @@ async function execute(action, args, runtimeMeta) {
 
 		if (useServerSearch) {
 			response = await invoke('searchDevices', () =>
-				deviceManager.searchDevices({
+				searchDevicesWithFallback(deviceManager, {
 					productKey,
 					keyword,
 					status,
@@ -1563,13 +1716,32 @@ async function execute(action, args, runtimeMeta) {
 			throw new Error('MISSING_ARG:startTime/endTime 不能为空');
 		}
 
-		const response = await invoke('queryAlarmList', () => alarmManager.queryAlarmList(params));
+		let response = await invoke('queryAlarmList', () => alarmManager.queryAlarmList(params));
+		let deviceResolution = null;
+		if (deviceName && isDeviceMissingResponse(response)) {
+			deviceResolution = await resolveDeviceCodeFromKeyword({
+				deviceManager,
+				args,
+				invoke,
+				keyword: deviceName,
+			});
+			if (deviceResolution.resolved) {
+				params.deviceName = deviceResolution.deviceCode;
+				response = await invoke('queryAlarmListResolved', () =>
+					alarmManager.queryAlarmList(params)
+				);
+			}
+		}
 		return {
 			action,
+			inputDeviceName: deviceName || null,
+			deviceResolution,
 			params,
 			data: response?.data ?? null,
 			success: response?.success === true,
-			errorMessage: response?.errorMessage,
+			errorMessage: response?.success === true
+				? response?.errorMessage
+				: buildDeviceResolutionFailureMessage(response?.errorMessage, deviceResolution),
 		};
 	}
 

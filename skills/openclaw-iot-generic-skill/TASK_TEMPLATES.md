@@ -51,7 +51,7 @@
 4. 可选：关联其它点位做并行观察：
    - `query-history --identifiers id1,id2,... --range last_24h --aggregate latest,max,avg --omitData true`
 5. 若波动与告警相关，补查告警窗口：
-   - `alarms --deviceName <deviceName> --startTime "<t1>" --endTime "<t2>"`
+   - `alarms --deviceName <deviceCode> --startTime "<t1>" --endTime "<t2>"`
    - 若分析平台级模式，可省略 `--deviceName`
 6. 输出结论：
    - 是否异常（相对历史均值/最大值）
@@ -76,7 +76,7 @@
 
 1. 查询目标时间窗口告警：
    - `alarms --startTime "<t1>" --endTime "<t2>"`
-   - 只有需要缩小到单设备时才追加 `--deviceName <deviceName>`
+   - 只有需要缩小到单设备时才追加 `--deviceName <deviceCode>`
 2. 做轻量分类（按规则、级别、状态）：
    - `alarmRule.name` / `levelText` / `statusText`
 3. 提取高频告警的关键字段：

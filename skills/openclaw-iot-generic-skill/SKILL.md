@@ -5,6 +5,7 @@
 - **Description**: 基于 IoT 物模型执行通用设备操作：发现能力、读写属性、调用服务、查询事件、查询告警。
 - **核心原则**:
   - 不假设设备类型（灯/插座/空调等），始终以物模型 `identifier` 为准。
+  - `deviceName` 表示设备编码/deviceCode，不是设备昵称；用户给昵称、中文显示名、模糊名或“叫 X 的设备”时，必须先 `list-devices --keyword "<name>"` 搜索，不要直接把该值传给 `device-status`、历史查询或告警查询。
   - 默认低 token 路径：优先摘要、必要时再查明细。
   - 输出必须可解析：命令执行结果只使用脚本返回 JSON 做判断。
 
@@ -49,9 +50,11 @@
 4. 设备列表 / 搜索
    `node {{SKILL_PATH}}/index.js --action list-devices [--productKey <productKey>] [--page 1] [--pageSize 20] [--status ONLINE|OFFLINE|UNACTIVE] [--keyword <deviceCodeOrNickName>] [--brief true] [--fetchAll true]`
    - `deviceName` 表示设备编码/deviceCode，不是设备昵称；`keyword` 会服务端分页模糊匹配设备编码和设备昵称。
+   - `productKey` 不是必填；只有昵称/模糊名时直接传 `keyword`。
 
 5. 设备状态
    `node {{SKILL_PATH}}/index.js --action device-status --deviceName <deviceCode>`
+   - 如果用户给的是昵称/模糊名，先执行 `list-devices --keyword "<name>"`，再用返回的 `deviceCode` 查询。
 
 6. 设备详情（可拿到 productKey）
    `node {{SKILL_PATH}}/index.js --action device-detail [--deviceName <deviceCode> | --deviceId <deviceId>]`

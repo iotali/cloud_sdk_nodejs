@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.3
+
+- 增强 OpenClaw IoT Generic Skill 的设备昵称识别：当 `device-status` 或 `alarms` 收到“设备不存在”时，会自动按昵称/模糊名搜索设备编码后重试。
+- 明确 `deviceName` 表示设备编码/deviceCode，不是设备昵称；`list-devices --keyword` 可在无 `productKey` 时搜索设备编码和昵称。
+- 脱敏工具输出中的 `deviceSecret`、`appSecret`、`token`、`accessToken` 字段。
+
 ## v1.1.1
 
 - `DeviceManager` 增加参数兼容能力：支持对象参数与位置参数两种调用方式。
