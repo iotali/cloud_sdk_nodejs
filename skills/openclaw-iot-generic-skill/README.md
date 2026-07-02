@@ -22,7 +22,7 @@
 - `set-props`: 设置设备属性
 - `call-service`: 调用设备服务
 - `query-events`: 查询事件记录
-- `alarms`: 查询告警
+- `alarms`: 查询告警；`deviceName` 可选，省略时查询时间窗口内全部设备告警
 
 ## 本地调试
 
@@ -149,6 +149,11 @@ bash <(curl -fsSL "https://raw.githubusercontent.com/iotali/cloud_sdk_nodejs/mas
 - 可复现命令示例：
 
 ```bash
+IOT_BASE_URL=https://your-iot-domain.com \
+IOT_APP_ID=your-app-id \
+IOT_APP_SECRET=your-app-secret \
+node index.js --action alarms --startTime "2025-12-01 00:00:00" --endTime "2025-12-31 23:59:59" --page 1 --pageSize 20
+
 IOT_BASE_URL=https://your-iot-domain.com \
 IOT_APP_ID=your-app-id \
 IOT_APP_SECRET=your-app-secret \

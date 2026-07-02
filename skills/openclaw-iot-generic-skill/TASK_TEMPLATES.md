@@ -20,6 +20,7 @@
    - `query-history --deviceName <deviceName> --identifiers <ids> --range last_24h --aggregate latest,count --omitData true`
 4. 查询最近告警：
    - `alarms --deviceName <deviceName> --startTime "<t1>" --endTime "<t2>"`
+   - 未知设备时可省略 `--deviceName` 查询全局告警列表
 5. 输出结论：
    - 离线是否单点问题（仅该设备）还是批量问题（同产品多设备）
    - 最近一次在线时间、关键指标、相关告警
@@ -50,6 +51,7 @@
    - `query-history --identifiers id1,id2,... --range last_24h --aggregate latest,max,avg --omitData true`
 5. 若波动与告警相关，补查告警窗口：
    - `alarms --deviceName <deviceName> --startTime "<t1>" --endTime "<t2>"`
+   - 若分析平台级模式，可省略 `--deviceName`
 6. 输出结论：
    - 是否异常（相对历史均值/最大值）
    - 异常可能类型（瞬时尖峰/持续偏高/周期波动）
@@ -72,7 +74,8 @@
 ### 执行步骤
 
 1. 查询目标时间窗口告警：
-   - `alarms --deviceName <deviceName> --startTime "<t1>" --endTime "<t2>"`
+   - `alarms --startTime "<t1>" --endTime "<t2>"`
+   - 只有需要缩小到单设备时才追加 `--deviceName <deviceName>`
 2. 做轻量分类（按规则、级别、状态）：
    - `alarmRule.name` / `levelText` / `statusText`
 3. 提取高频告警的关键字段：

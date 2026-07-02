@@ -51,9 +51,10 @@ if (require.main === module) {
 	const baseUrl = 'http://127.0.0.1:18083';
 	const token = '488820fb-41af-40e5-b2d3-d45a8c576eea';
 	const params = {
-		deviceName: 'MM2025002',
 		startTime: '2025-06-14 06:30:39',
 		endTime: '2025-07-16 18:30:39',
+		page: 1,
+		pageSize: 20,
 	};
 
 	queryAlarmList(baseUrl, token, params);

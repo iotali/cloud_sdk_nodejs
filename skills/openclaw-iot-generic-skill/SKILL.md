@@ -74,7 +74,8 @@
     `node {{SKILL_PATH}}/index.js --action query-events --deviceName <deviceName> --identifier <eventId> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"`
 
 13. 告警查询  
-    `node {{SKILL_PATH}}/index.js --action alarms --deviceName <deviceName> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>]`
+    `node {{SKILL_PATH}}/index.js --action alarms [--deviceName <deviceName>] --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>] [--page 1] [--pageSize 20]`
+    - 省略 `deviceName` 时查询时间窗口内全部设备告警；传入时查询指定设备告警。
 
 ## 多轮任务模板（入口）
 

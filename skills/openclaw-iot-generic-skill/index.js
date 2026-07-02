@@ -114,7 +114,7 @@ function usage() {
 		'  --action set-props --deviceName <name> --points \'[{"identifier":"power","value":"1"}]\' [--dryRun true] [--confirm true]',
 		'  --action call-service --deviceName <name> --servicePoint \'{"identifier":"start"}\' [--pointList \'[]\'] [--dryRun true] [--confirm true]',
 		'  --action query-events --deviceName <name> --identifier <eventId> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"',
-		'  --action alarms --deviceName <name> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>]',
+		'  --action alarms [--deviceName <name>] --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>] [--page 1] [--pageSize 20]',
 		'  Optional: --quiet true|false (default true)',
 		'  Optional(read): --readTimeoutMs 10000 --readRetryCount 2 --readRetryDelayMs 300',
 	].join('\n');
@@ -1522,11 +1522,13 @@ async function execute(action, args, runtimeMeta) {
 	if (action === 'alarms') {
 		const deviceName = getRequiredValue(args, 'deviceName', 'IOT_DEFAULT_DEVICE_NAME');
 		const params = {
-			deviceName,
-			status: args.status,
 			startTime: args.startTime,
 			endTime: args.endTime,
 		};
+		if (deviceName) params.deviceName = deviceName;
+		if (args.status) params.status = args.status;
+		if (args.page !== undefined) params.page = toPositiveInt(args.page, 1);
+		if (args.pageSize !== undefined) params.pageSize = Math.min(100, toPositiveInt(args.pageSize, 20));
 		if (!params.startTime || !params.endTime) {
 			throw new Error('MISSING_ARG:startTime/endTime 不能为空');
 		}

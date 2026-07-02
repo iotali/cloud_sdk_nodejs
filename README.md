@@ -58,7 +58,7 @@
   - `list(filter)`：分页查询产品列表
 
 - `AlarmManager`（`createAlarmManager(client)`）
-  - `queryAlarmList(params)`：查询告警列表（支持 `deviceName`、`status`、`startTime`、`endTime`）
+  - `queryAlarmList(params)`：查询告警列表（支持可选 `deviceName`、`status`、`startTime`、`endTime`；省略 `deviceName` 时查询全部设备告警，其他参数按平台接口透传）
 
 > 说明：`queryDeviceEventData` 与 `queryAlarmList` 已在当前 SDK 中提供，可直接用于事件与告警查询。
 
