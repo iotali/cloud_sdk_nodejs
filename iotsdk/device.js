@@ -51,6 +51,16 @@ class DeviceManager {
 		return { productKey: productKeyOrParams, page, pageSize };
 	}
 
+	#normalizeDeviceSearchArgs(params = {}) {
+		return {
+			productKey: params.productKey,
+			keyword: params.keyword,
+			status: params.status,
+			page: params.page ?? 1,
+			pageSize: params.pageSize ?? 20,
+		};
+	}
+
 	#normalizeBatchDetailArgs(productKeyOrParams, deviceNames) {
 		if (
 			productKeyOrParams &&
@@ -236,6 +246,43 @@ class DeviceManager {
 					`设备${index + 1}: ${device.deviceName} (${device.deviceId})`
 				);
 				console.info(`状态: ${device.status === 'ONLINE' ? '在线' : '离线'}`);
+			});
+		}
+
+		return response;
+	}
+
+	/**
+	 * 搜索设备
+	 * @param {Object} params - 搜索参数
+	 * @param {string} [params.productKey] - 产品唯一标识码，可选
+	 * @param {string} [params.keyword] - 搜索关键字，同时模糊匹配设备编码(deviceName/deviceCode)和设备昵称(nickName)
+	 * @param {string} [params.status] - ONLINE/OFFLINE/UNACTIVE，可选
+	 * @param {number} [params.page=1] - 页码，1 表示第一页
+	 * @param {number} [params.pageSize=20] - 每页数量，最大 100
+	 * @returns {Promise<Object>}
+	 */
+	async searchDevices(params = {}) {
+		const args = this.#normalizeDeviceSearchArgs(params);
+		const endpoint = '/api/v1/quickdevice/search';
+		const payload = {
+			page: Math.max(1, args.page || 1),
+			pageSize: Math.min(100, Math.max(1, args.pageSize || 20)),
+		};
+		if (args.productKey) payload.productKey = args.productKey;
+		if (args.keyword) payload.keyword = args.keyword;
+		if (args.status) payload.status = String(args.status).toUpperCase();
+
+		const response = await this.client.makeRequest(endpoint, payload);
+
+		if (this.client.checkResponse(response)) {
+			const pageData = response.data || {};
+			const devices = Array.isArray(pageData.content) ? pageData.content : [];
+			console.info(`搜索到${pageData.totalElements ?? devices.length}台设备`);
+			devices.forEach((device, index) => {
+				console.info(
+					`设备${index + 1}: ${device.deviceName} / ${device.nickName || '无昵称'} (${device.deviceId})`
+				);
 			});
 		}
 

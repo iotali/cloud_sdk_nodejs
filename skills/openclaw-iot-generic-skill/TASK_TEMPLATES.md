@@ -1,6 +1,6 @@
 # OpenClaw 多轮任务模板（M4）
 
-以下模板用于让智能体在多轮对话里稳定完成 IoT 诊断任务。  
+以下模板用于让智能体在多轮对话里稳定完成 IoT 诊断任务。
 默认遵循：先 `discover`，再查询，最后给出可执行建议。
 
 ## 模板 A：设备离线排查
@@ -13,13 +13,14 @@
 ### 执行步骤
 
 1. 查询设备状态：
-   - `device-status --deviceName <deviceName>`
+   - 若只有设备昵称，先用 `list-devices --keyword "<nickName>"` 搜索拿到设备编码
+   - `device-status --deviceName <deviceCode>`
 2. 若设备离线，查询产品内同类设备状态分布：
    - `list-devices --productKey <productKey> --status OFFLINE --fetchAll true`
 3. 拉取关键属性最近窗口（如通信/心跳相关）：
-   - `query-history --deviceName <deviceName> --identifiers <ids> --range last_24h --aggregate latest,count --omitData true`
+   - `query-history --deviceName <deviceCode> --identifiers <ids> --range last_24h --aggregate latest,count --omitData true`
 4. 查询最近告警：
-   - `alarms --deviceName <deviceName> --startTime "<t1>" --endTime "<t2>"`
+   - `alarms --deviceName <deviceCode> --startTime "<t1>" --endTime "<t2>"`
    - 未知设备时可省略 `--deviceName` 查询全局告警列表
 5. 输出结论：
    - 离线是否单点问题（仅该设备）还是批量问题（同产品多设备）

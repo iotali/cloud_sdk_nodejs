@@ -105,16 +105,16 @@ function usage() {
 		'  --action discover --productKey <productKey> [--fullModel true] [--refreshModel true]',
 		'  --action resolve-intent --productKey <productKey> --query <text> [--topK 8] [--writableOnly true]',
 		'  --action list-writable-identifiers --productKey <productKey> [--onlyAllowed true]',
-		'  --action list-devices --productKey <productKey> [--page 1] [--pageSize 20] [--status ONLINE|OFFLINE|UNACTIVE] [--keyword name] [--brief true] [--fetchAll true]',
-		'  --action device-status --deviceName <deviceName>',
-		'  --action device-detail [--deviceName <deviceName> | --deviceId <deviceId>]',
-		'  --action query-history --deviceName <name> [--identifier <id> | --identifiers \'["id1","id2"]\' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]',
-		'  --action query-prop --deviceName <name> --identifier <id> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
-		'  --action query-props --deviceName <name> --identifiers \'["id1","id2"]\' --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
-		'  --action set-props --deviceName <name> --points \'[{"identifier":"power","value":"1"}]\' [--dryRun true] [--confirm true]',
-		'  --action call-service --deviceName <name> --servicePoint \'{"identifier":"start"}\' [--pointList \'[]\'] [--dryRun true] [--confirm true]',
-		'  --action query-events --deviceName <name> --identifier <eventId> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"',
-		'  --action alarms [--deviceName <name>] --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>] [--page 1] [--pageSize 20]',
+		'  --action list-devices [--productKey <productKey>] [--page 1] [--pageSize 20] [--status ONLINE|OFFLINE|UNACTIVE] [--keyword deviceCodeOrNickName] [--brief true] [--fetchAll true]',
+		'  --action device-status --deviceName <deviceCode>',
+		'  --action device-detail [--deviceName <deviceCode> | --deviceId <deviceId>]',
+		'  --action query-history --deviceName <deviceCode> [--identifier <id> | --identifiers \'["id1","id2"]\' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]',
+		'  --action query-prop --deviceName <deviceCode> --identifier <id> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
+		'  --action query-props --deviceName <deviceCode> --identifiers \'["id1","id2"]\' --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]',
+		'  --action set-props --deviceName <deviceCode> --points \'[{"identifier":"power","value":"1"}]\' [--dryRun true] [--confirm true]',
+		'  --action call-service --deviceName <deviceCode> --servicePoint \'{"identifier":"start"}\' [--pointList \'[]\'] [--dryRun true] [--confirm true]',
+		'  --action query-events --deviceName <deviceCode> --identifier <eventId> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"',
+		'  --action alarms [--deviceName <deviceCode>] --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>] [--page 1] [--pageSize 20]',
 		'  Optional: --quiet true|false (default true)',
 		'  Optional(read): --readTimeoutMs 10000 --readRetryCount 2 --readRetryDelayMs 300',
 	].join('\n');
@@ -1239,20 +1239,39 @@ async function execute(action, args, runtimeMeta) {
 
 	if (action === 'list-devices') {
 		const productKey = getRequiredValue(args, 'productKey', 'IOT_DEFAULT_PRODUCT_KEY');
-		assertRequired(productKey, 'productKey');
 		const page = toPositiveInt(args.page, 1);
 		const pageSize = Math.min(100, toPositiveInt(args.pageSize, 20));
 		const status = args.status ? String(args.status).toUpperCase() : null;
 		const keyword = args.keyword ? String(args.keyword).trim() : '';
 		const brief = isTrueFlag(args.brief, true);
 		const fetchAll = isTrueFlag(args.fetchAll, true);
+		const useServerSearch = Boolean(keyword || status);
+		if (!productKey && !useServerSearch) {
+			throw new Error('MISSING_ARG:productKey 不能为空；按设备编码/昵称搜索时可只传 keyword');
+		}
 
 		let response;
 		let devices;
 		let paginationMode;
 		let note = null;
+		let pageData = null;
 
-		if (fetchAll) {
+		if (useServerSearch) {
+			response = await invoke('searchDevices', () =>
+				deviceManager.searchDevices({
+					productKey,
+					keyword,
+					status,
+					page,
+					pageSize,
+				})
+			);
+			pageData = response?.data || {};
+			devices = Array.isArray(pageData.content) ? pageData.content : [];
+			paginationMode = 'server_search';
+			note =
+				'keyword/status 已使用服务端分页搜索；keyword 同时模糊匹配设备编码(deviceName/deviceCode)和设备昵称(nickName)';
+		} else if (fetchAll) {
 			response = await invoke('queryDevicesByProduct', () =>
 				deviceManager.queryDevicesByProduct({
 					productKey,
@@ -1279,15 +1298,16 @@ async function execute(action, args, runtimeMeta) {
 		}
 
 		let filtered = devices;
-		if (status) {
+		if (!useServerSearch && status) {
 			filtered = filtered.filter((d) => String(d?.status || '').toUpperCase() === status);
 		}
-		if (keyword) {
-			filtered = filtered.filter((d) =>
-				String(d?.deviceName || '')
-					.toLowerCase()
-					.includes(keyword.toLowerCase())
-			);
+		if (!useServerSearch && keyword) {
+			const lowerKeyword = keyword.toLowerCase();
+			filtered = filtered.filter((d) => {
+				const deviceCode = String(d?.deviceName || '').toLowerCase();
+				const nickName = String(d?.nickName || '').toLowerCase();
+				return deviceCode.includes(lowerKeyword) || nickName.includes(lowerKeyword);
+			});
 		}
 
 		const statusCounts = filtered.reduce(
@@ -1302,7 +1322,15 @@ async function execute(action, args, runtimeMeta) {
 		let pageItems;
 		let hasMore;
 		let total;
-		if (fetchAll) {
+		if (useServerSearch) {
+			pageItems = filtered;
+			total = Number.isFinite(Number(pageData.totalElements))
+				? Number(pageData.totalElements)
+				: filtered.length;
+			hasMore =
+				pageData.last === false ||
+				(Number.isFinite(total) && page * pageSize < total);
+		} else if (fetchAll) {
 			const start = (page - 1) * pageSize;
 			const end = start + pageSize;
 			pageItems = filtered.slice(start, end);
@@ -1329,6 +1357,8 @@ async function execute(action, args, runtimeMeta) {
 		const items = brief
 			? pageItems.map((d) => ({
 					deviceName: d.deviceName,
+					deviceCode: d.deviceName,
+					nickName: d.nickName || null,
 					deviceId: d.deviceId,
 					productKey: d.productKey || d.product_key || productKey,
 					status: d.status,

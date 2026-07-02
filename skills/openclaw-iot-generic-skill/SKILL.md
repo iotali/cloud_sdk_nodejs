@@ -10,71 +10,72 @@
 
 ## 标准执行流程（必须遵守）
 
-1. **先 discover，再执行**  
+1. **先 discover，再执行**
    新 `productKey` 或首次会话，先执行：
    `node {{SKILL_PATH}}/index.js --action discover --productKey <productKey>`
 
-2. **意图映射 identifier（推荐）**  
+2. **意图映射 identifier（推荐）**
    用户需求不明确时，先执行：
    `node {{SKILL_PATH}}/index.js --action resolve-intent --productKey <productKey> --query <text> --topK 8`
 
-3. **查询类任务优先摘要**  
+3. **查询类任务优先摘要**
    时间序列优先：
-   `query-history --aggregate ... --omitData true`  
+   `query-history --aggregate ... --omitData true`
    仅在用户要求“明细点位/原始数据”时再拉完整 `data`。
 
-4. **写操作前强校验**  
+4. **写操作前强校验**
    顺序固定：
    - `discover` / `resolve-intent`
    - `list-writable-identifiers --onlyAllowed true`
    - `set-props` / `call-service --dryRun true`
    - 用户确认后再真实执行（必要时 `--confirm true`）
 
-5. **失败处理重试策略**  
+5. **失败处理重试策略**
    读操作默认已启用超时重试；若出现 `READ_TIMEOUT` / `network_error`：
    - 保留当前目标不变，缩小查询范围后重试（如 `last_24h` -> `last_6h`）。
    - 仍失败时输出明确失败原因和下一步建议。
 
 ## Commands
 
-1. 发现产品物模型  
+1. 发现产品物模型
    `node {{SKILL_PATH}}/index.js --action discover --productKey <productKey> [--refreshModel true] [--fullModel true]`
 
-2. 意图解析（自然语言 -> identifier）  
+2. 意图解析（自然语言 -> identifier）
    `node {{SKILL_PATH}}/index.js --action resolve-intent --productKey <productKey> --query <text> [--topK 8] [--writableOnly true]`
 
-3. 可写点位清单  
+3. 可写点位清单
    `node {{SKILL_PATH}}/index.js --action list-writable-identifiers --productKey <productKey> [--onlyAllowed true]`
 
-4. 设备列表  
-   `node {{SKILL_PATH}}/index.js --action list-devices --productKey <productKey> [--page 1] [--pageSize 20] [--status ONLINE|OFFLINE|UNACTIVE] [--keyword <name>] [--brief true] [--fetchAll true]`
+4. 设备列表 / 搜索
+   `node {{SKILL_PATH}}/index.js --action list-devices [--productKey <productKey>] [--page 1] [--pageSize 20] [--status ONLINE|OFFLINE|UNACTIVE] [--keyword <deviceCodeOrNickName>] [--brief true] [--fetchAll true]`
+   - `deviceName` 表示设备编码/deviceCode，不是设备昵称；`keyword` 会服务端分页模糊匹配设备编码和设备昵称。
 
-5. 设备状态  
-   `node {{SKILL_PATH}}/index.js --action device-status --deviceName <deviceName>`
+5. 设备状态
+   `node {{SKILL_PATH}}/index.js --action device-status --deviceName <deviceCode>`
 
-6. 设备详情（可拿到 productKey）  
-   `node {{SKILL_PATH}}/index.js --action device-detail [--deviceName <deviceName> | --deviceId <deviceId>]`
+6. 设备详情（可拿到 productKey）
+   `node {{SKILL_PATH}}/index.js --action device-detail [--deviceName <deviceCode> | --deviceId <deviceId>]`
 
-7. 统一历史查询（推荐）  
-   `node {{SKILL_PATH}}/index.js --action query-history --deviceName <deviceName> [--identifier <id> | --identifiers '["id1","id2"]' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]`
+7. 统一历史查询（推荐）
+   `node {{SKILL_PATH}}/index.js --action query-history --deviceName <deviceCode> [--identifier <id> | --identifiers '["id1","id2"]' | --identifiers id1,id2] [--range last_1h|last_6h|last_24h|last_7d] [--startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"] [--downSampling 1s] [--limit 200] [--aggregate latest|min|max|avg|count|all] [--omitData true]`
 
-8. 单点历史  
-   `node {{SKILL_PATH}}/index.js --action query-prop --deviceName <deviceName> --identifier <id> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]`
+8. 单点历史
+   `node {{SKILL_PATH}}/index.js --action query-prop --deviceName <deviceCode> --identifier <id> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]`
 
-9. 多点历史  
-   `node {{SKILL_PATH}}/index.js --action query-props --deviceName <deviceName> --identifiers '["id1","id2"]' --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]`
+9. 多点历史
+   `node {{SKILL_PATH}}/index.js --action query-props --deviceName <deviceCode> --identifiers '["id1","id2"]' --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--downSampling 1s]`
 
-10. 设置属性  
-   `node {{SKILL_PATH}}/index.js --action set-props --deviceName <deviceName> --points '[{"identifier":"power_switch","value":"1"}]' [--dryRun true] [--confirm true]`
+10. 设置属性
+   `node {{SKILL_PATH}}/index.js --action set-props --deviceName <deviceCode> --points '[{"identifier":"power_switch","value":"1"}]' [--dryRun true] [--confirm true]`
 
-11. 调用服务  
-    `node {{SKILL_PATH}}/index.js --action call-service --deviceName <deviceName> --servicePoint '{"identifier":"start_device"}' [--pointList '[{"identifier":"mode","value":"2"}]'] [--dryRun true] [--confirm true]`
+11. 调用服务
+    `node {{SKILL_PATH}}/index.js --action call-service --deviceName <deviceCode> --servicePoint '{"identifier":"start_device"}' [--pointList '[{"identifier":"mode","value":"2"}]'] [--dryRun true] [--confirm true]`
 
-12. 事件查询  
-    `node {{SKILL_PATH}}/index.js --action query-events --deviceName <deviceName> --identifier <eventId> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"`
+12. 事件查询
+    `node {{SKILL_PATH}}/index.js --action query-events --deviceName <deviceCode> --identifier <eventId> --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss"`
 
-13. 告警查询  
-    `node {{SKILL_PATH}}/index.js --action alarms [--deviceName <deviceName>] --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>] [--page 1] [--pageSize 20]`
+13. 告警查询
+    `node {{SKILL_PATH}}/index.js --action alarms [--deviceName <deviceCode>] --startTime "YYYY-MM-DD HH:mm:ss" --endTime "YYYY-MM-DD HH:mm:ss" [--status <status>] [--page 1] [--pageSize 20]`
     - 省略 `deviceName` 时查询时间窗口内全部设备告警；传入时查询指定设备告警。
 
 ## 多轮任务模板（入口）

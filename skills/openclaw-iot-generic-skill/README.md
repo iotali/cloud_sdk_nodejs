@@ -13,7 +13,7 @@
 - `discover`: 查询产品物模型
 - `resolve-intent`: 输入自然语言返回候选 identifier
 - `list-writable-identifiers`: 输出可写点位清单
-- `list-devices`: 查询产品下设备列表（支持分页、过滤、分页策略）
+- `list-devices`: 查询/搜索设备（`keyword` 服务端分页匹配设备编码和设备昵称）
 - `device-status`: 查询设备在线状态
 - `device-detail`: 查询设备详情（可返回 `productKey`）
 - `query-history`: 历史数据统一查询封装（推荐）
@@ -39,12 +39,13 @@ node index.js --action discover --productKey your-product-key
 node index.js --action resolve-intent --productKey your-product-key --query "设备状态"
 node index.js --action list-writable-identifiers --productKey your-product-key
 node index.js --action list-devices --productKey your-product-key --page 1 --pageSize 20 --status ONLINE --fetchAll true
-node index.js --action device-status --deviceName your-device-name
-node index.js --action device-detail --deviceName your-device-name
-node index.js --action query-history --deviceName your-device-name --identifiers temperature_1,temperature_2 --range last_24h --downSampling 10s --limit 300
-node index.js --action query-history --deviceName your-device-name --identifier temperature_1 --range last_24h --aggregate latest,avg,max --omitData true
-node index.js --action set-props --deviceName your-device-name --points '[{"identifier":"power_switch","value":"1"}]' --dryRun true
-node index.js --action call-service --deviceName your-device-name --servicePoint '{"identifier":"reboot"}' --pointList '[]' --confirm true
+node index.js --action list-devices --keyword "配电房" --page 1 --pageSize 20
+node index.js --action device-status --deviceName your-device-code
+node index.js --action device-detail --deviceName your-device-code
+node index.js --action query-history --deviceName your-device-code --identifiers temperature_1,temperature_2 --range last_24h --downSampling 10s --limit 300
+node index.js --action query-history --deviceName your-device-code --identifier temperature_1 --range last_24h --aggregate latest,avg,max --omitData true
+node index.js --action set-props --deviceName your-device-code --points '[{"identifier":"power_switch","value":"1"}]' --dryRun true
+node index.js --action call-service --deviceName your-device-code --servicePoint '{"identifier":"reboot"}' --pointList '[]' --confirm true
 ```
 
 默认会静默 SDK 日志，仅输出一行 JSON 到 stdout（`IOT_SKILL_QUIET=true`）。
@@ -63,10 +64,11 @@ node index.js --action call-service --deviceName your-device-name --servicePoint
 - 支持 `omitData=true` 仅返回摘要，不返回明细点位
 
 `list-devices` 分页策略：
-- `fetchAll=true`（默认）：先拉全量再进行过滤/分页，结果准确
-- `fetchAll=false`：按服务端分页请求，网络成本更低；若同时传 `status/keyword`，过滤仅作用于当前页
+- 传 `keyword` 或 `status` 时：优先使用服务端分页搜索，`keyword` 同时模糊匹配设备编码 `deviceName/deviceCode` 和设备昵称 `nickName`
+- 不传搜索条件时，`fetchAll=true`（默认）：先拉产品下设备再进行本地分页
+- 不传搜索条件且 `fetchAll=false`：按服务端分页请求，网络成本更低
 - 若平台未按 `page/pageSize` 生效，技能会自动回退到本地分页，并在返回中标记 `paginationMode=server_page_incompatible_fallback`
-- 精简返回（`brief=true`）会包含 `productKey` 字段，便于后续直接联动产品级操作
+- 精简返回（`brief=true`）会包含 `deviceName/deviceCode`、`nickName`、`productKey` 字段，便于后续联动设备级操作
 
 M3 新增能力：
 - 结构化日志：`stderr` 输出 JSON 单行日志（不污染 `stdout`）

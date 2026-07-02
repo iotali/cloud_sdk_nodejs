@@ -38,6 +38,7 @@
   - `getDeviceDetail(...)`：查询设备详情（deviceName/deviceId）
   - `getDeviceStatus(...)`：查询设备在线状态
   - `queryDevicesByProduct(...)`：查询产品下设备列表（分页）
+  - `searchDevices(...)`：服务端分页搜索设备（keyword 同时模糊匹配设备编码 `deviceName/deviceCode` 和设备昵称 `nickName`）
   - `batchQueryDeviceDetails(...)`：批量查询设备详情
 
 - `ThingManager`（`createThingManager(client)`）
@@ -140,9 +141,9 @@ if (client.checkResponse(response)) {
 ### 3. 查询设备详情
 
 ```javascript
-// 通过设备名称查询
+// 通过设备编码(deviceName/deviceCode)查询
 const response1 = await deviceManager.getDeviceDetail({
-	deviceName: 'your-device-name',
+	deviceName: 'your-device-code',
 });
 
 // 或通过设备ID查询
@@ -191,7 +192,8 @@ try {
 	if (client.checkResponse(batchResponse)) {
 		const devicesData = batchResponse.data;
 		devicesData.forEach((device) => {
-			console.log(`设备名称: ${device.deviceName}`);
+			console.log(`设备编码: ${device.deviceName}`);
+			console.log(`设备昵称: ${device.nickName}`);
 			console.log(`设备状态: ${device.status}`);
 			console.log(`最后在线时间: ${device.lastOnlineTime}`);
 			console.log('-------------------');
@@ -221,7 +223,28 @@ try {
 }
 ```
 
-### 7. 发送自定义指令（异步）
+### 7. 搜索设备
+
+```javascript
+// 服务端分页搜索设备；deviceName 是设备编码，nickName 是设备昵称
+try {
+	const searchResponse = await deviceManager.searchDevices({
+		productKey: 'your-product-key',
+		keyword: '配电',
+		status: 'ONLINE',
+		page: 1,
+		pageSize: 20,
+	});
+
+	if (client.checkResponse(searchResponse)) {
+		console.log('设备搜索成功');
+	}
+} catch (error) {
+	console.error('设备搜索失败:', error);
+}
+```
+
+### 8. 发送自定义指令（异步）
 
 ```javascript
 const { Buffer } = require('buffer');
